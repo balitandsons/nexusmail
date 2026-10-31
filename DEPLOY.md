@@ -1,3 +1,24 @@
+# Deploy NexusMail on a free Google Cloud VM
+
+Gives you a permanent `https://<ip>.sslip.io` address with automatic HTTPS and no domain purchase. Cost: $0 on the e2-micro Always Free tier
+(1 VM in us-west1, us-central1 or us-east1, 30 GB standard disk). A billing account with a card must be attached to the project.
+
+1. Console > Compute Engine > **Create instance**: machine type **e2-micro**, region **us-central1** (or us-west1 / us-east1),
+   boot disk **Ubuntu 24.04 LTS, standard persistent disk, 30 GB**, firewall: tick **Allow HTTP traffic** and **Allow HTTPS traffic**.
+2. Expand **Advanced options > Management**. Under **Metadata** add:
+   * `admin-password` = a long password (required)
+   * `gemini-key` = your Gemini API key (optional)
+   * `github-token` = only needed if this repo is private: a fine-grained token with read-only *Contents* access to it
+3. In the **Automation > Startup script** box paste the whole of `deploy/gce-startup.sh`, then **Create**.
+4. Wait ~5 minutes. Watch progress with SSH: `sudo tail -f /var/log/nexusmail-setup.log`. It ends with the URL.
+5. VPC network > IP addresses: **Reserve** the VM's external address as static, so the URL never changes (free while attached to a running VM).
+6. Open the URL, sign in, switch to **Live**. Use the webhook URLs from **API & Webhooks** in your Meta app.
+
+Update later: SSH in and run `sudo google_metadata_script_runner startup` (pulls the latest code, rebuilds, restarts).
+Back up `/opt/nexusmail/data` (mailbox credentials and campaigns). Google Cloud blocks outbound port 25; Hostinger on 465/587, Brevo and ZeptoMail (API) are fine.
+
+---
+
 # Deploy NexusMail
 
 Run locally: see README.md. To host it, use any VPS with a persistent disk (hosts with temporary disks erase `data/` on restart).
