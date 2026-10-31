@@ -1,0 +1,39 @@
+{
+  "name": "nexusmail",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-provider bulk mailer (Hostinger, Brevo, ZeptoMail, SMTP) with AI omnichannel inbox",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx server/index.ts",
+    "test": "tsx --test server/test/*.test.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.25.0",
+    "express": "^4.21.2",
+    "imapflow": "^1.0.191",
+    "mailparser": "^3.7.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^6.9.16",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/mailparser": "^3.4.5",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^6.4.17",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
