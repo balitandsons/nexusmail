@@ -1,0 +1,1 @@
+NexusMail is served by Cloud Run; this file only keeps the Hosting public dir non-empty.

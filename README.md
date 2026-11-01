@@ -18,6 +18,8 @@ npm run build && npm start  # http://localhost:3000
 npm test                    # unit tests for templating, CSV parsing, health scoring
 ```
 
+Hosting: see [DEPLOY-FIREBASE.md](DEPLOY-FIREBASE.md) (Firebase + Cloud Run) or [DEPLOY.md](DEPLOY.md) (VPS / Google VM).
+
 ## Modes
 
 * **Test Sandbox** (default): deliveries and channel replies are simulated; nothing leaves the server. Pacing, quotas and balancing behave as in Live.

@@ -51,7 +51,8 @@ app.post('/u/:token', (req, res) => {
 });
 
 /* auth */
-const COOKIE = 'nm_session';
+// Firebase Hosting forwards only a cookie named __session to Cloud Run, so the login cookie must use that name.
+const COOKIE = '__session';
 const SESSION_DAYS = 14;
 function cookies(req: Request) {
   const out: Record<string, string> = {};
@@ -66,6 +67,7 @@ function isAuthed(req: Request) {
 }
 const loginFails = new Map<string, { n: number; t: number }>();
 app.post('/api/login', (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
   const ip = req.ip || '';
   const f = loginFails.get(ip) || { n: 0, t: Date.now() };
   if (Date.now() - f.t > 15 * 60000) { f.n = 0; f.t = Date.now(); }
@@ -77,6 +79,7 @@ app.post('/api/login', (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/logout', (_req, res) => { res.set('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`); res.json({ ok: true }); });
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
 app.use('/api', (req, res, next) => {
   if (!isAuthed(req)) return void res.status(401).json({ error: 'Not logged in' });
   if (req.method !== 'GET' && req.get('x-nm') !== '1') return void res.status(403).json({ error: 'Bad request' });
