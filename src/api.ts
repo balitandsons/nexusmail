@@ -67,6 +67,6 @@ export interface Conversation {
   id: string; channel: Channel; contactName: string; contactHandle: string; subject: string;
   messages: { id: string; dir: 'in' | 'out'; by: string; text: string; at: string; sandbox?: boolean }[];
   analysis?: { intent: string; sentiment: string; confidence: number; summary: string; suggestedReply: string; reasons: string; engine: string };
-  status: 'auto_replied' | 'needs_review' | 'replied' | 'closed'; unread: boolean; updatedAt: string;
+  status: 'auto_replied' | 'needs_review' | 'replied' | 'closed'; held?: boolean; heldReason?: string; unread: boolean; updatedAt: string;
 }
 export interface InboxState { conversations: Conversation[]; threshold: number; autopilot: boolean; mode: string; counts: { needsReview: number; autoReplied: number } }

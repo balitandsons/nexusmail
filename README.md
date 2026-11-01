@@ -51,6 +51,16 @@ For each message Gemini returns intent, sentiment, a confidence score and a draf
 Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.8-flash`; change it if your account uses a different model name).
 Without a key a simple keyword classifier is used; in Live mode its drafts are never auto-sent.
 
+## Inbox Agent (email triage)
+
+Every unread email in IMAP-enabled mailboxes (tick *Read replies via IMAP* on a Hostinger/SMTP mailbox, Live mode, checked every minute) goes through three stages:
+
+1. **Evidence**: bulk-mail headers, `noreply` senders, auto-responder and bounce markers count as "automated"; replies to an email you sent, people you have emailed before, and your allow list count as "human/known". Known beats automated.
+2. **Gemini** reads sender, subject, headers and the first 2 KB of text and picks a category (customer inquiry, prospect reply, product question, sales request, support, partnership, vendor invoice, legal/security, newsletter, promotion, notification, phishing, bounce, other). Email text is treated as untrusted data.
+3. **Policy (code, not the AI)**: customer/product/sales mail goes to the AI inbox for analysis and reply. Invoices, legal/security notices and anything unclear are **held for your review** and never deleted or auto-answered. Newsletters, promotions, notifications, phishing and bounces are moved to the mailbox **Trash folder** only if Gemini is at least 90% sure (adjustable) and nothing marks the sender as known.
+
+Safety: **Dry run is on by default**: it only logs "would trash" until you untick it on the *Inbox Agent* page. Nothing is ever permanently deleted; the log has a *Restore* button (moves it back and allow-lists the sender). Without a `GEMINI_API_KEY` the offline classifier can only keep or hold, never trash. Use the *Test an email* box to check decisions before going live.
+
 ## Deliverability and rules
 
 * Email only people who opted in or are your customers (CAN-SPAM, DPDP, GDPR and every provider's terms forbid unsolicited bulk mail).

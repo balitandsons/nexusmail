@@ -10,7 +10,7 @@ const CH: Record<Channel, { label: string; icon: string; color: string }> = {
   messenger: { label: 'Messenger', icon: 'share', color: '#818cf8' },
 };
 const INTENT: Record<string, string> = { lead_interested: 'Lead Interested', pricing_question: 'Pricing Question', support_request: 'Support Request', objection: 'Objection', unsubscribe: 'Unsubscribe', spam: 'Spam', other: 'Other' };
-const statusTag = (s: Conversation['status']) => s === 'auto_replied' ? <span className="tag ok">AUTO-SENT</span> : s === 'needs_review' ? <span className="tag warn">NEEDS REVIEW</span> : s === 'replied' ? <span className="tag accent">REPLIED</span> : <span className="tag dim">CLOSED</span>;
+const statusTag = (s: Conversation['status'], held?: boolean) => held ? <span className="tag accent">HELD BY AGENT</span> : s === 'auto_replied' ? <span className="tag ok">AUTO-SENT</span> : s === 'needs_review' ? <span className="tag warn">NEEDS REVIEW</span> : s === 'replied' ? <span className="tag accent">REPLIED</span> : <span className="tag dim">CLOSED</span>;
 
 export default function Inbox({ settings, onChange }: ViewCtx & { onChange: () => void }) {
   const { data, refresh } = usePoll<InboxState>('/inbox', 4000);
@@ -63,7 +63,7 @@ export default function Inbox({ settings, onChange }: ViewCtx & { onChange: () =
                   <div className="top2"><span style={{ color: CH[c.channel].color, display: 'flex', gap: 8, alignItems: 'center' }}><Icon n={CH[c.channel].icon} size={14} /><span style={{ color: '#fff' }}>{c.contactName}</span>{c.unread && <span style={{ width: 6, height: 6, borderRadius: 3, background: '#6366f1' }} />}</span><span className="mono dim" style={{ fontSize: 11, fontWeight: 400 }}>{fmtTime(c.updatedAt)}</span></div>
                   <div className="mono dim" style={{ fontSize: 11.5 }}>{c.contactHandle}</div>
                   <div className="prev">{[...c.messages].reverse().find((m) => m.dir === 'in')?.text ?? last?.text}</div>
-                  <div className="meta"><span>{c.analysis ? (INTENT[c.analysis.intent] || c.analysis.intent).toLowerCase() : ''}</span><span>{c.analysis && <span>{Math.round(c.analysis.confidence * 100)}% conf · </span>}{statusTag(c.status)}</span></div>
+                  <div className="meta"><span>{c.analysis ? (INTENT[c.analysis.intent] || c.analysis.intent).toLowerCase() : ''}</span><span>{c.analysis && <span>{Math.round(c.analysis.confidence * 100)}% conf · </span>}{statusTag(c.status, c.held)}</span></div>
                 </button>
               );
             })}
@@ -93,6 +93,7 @@ export default function Inbox({ settings, onChange }: ViewCtx & { onChange: () =
                     <div className="g"><div><span className="dim">Classified Intent:</span><b>{INTENT[a.intent] || a.intent}</b></div><div><span className="dim">Sentiment:</span><b style={{ textTransform: 'capitalize' }}>{a.sentiment}</b></div></div>
                     <div className="conf"><i style={{ width: a.confidence * 100 + '%', background: confColor }} /><u style={{ left: th * 100 + '%' }} /></div>
                     {a.reasons && <div className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>{a.reasons}</div>}
+                    {cur.held && <div className="warn" style={{ fontSize: 12.5, marginTop: 8 }}>Held by Inbox Agent, not auto-replied: {cur.heldReason}</div>}
                   </div>
                 )}
               </div>

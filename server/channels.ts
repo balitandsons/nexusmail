@@ -3,6 +3,7 @@ import { simpleParser } from 'mailparser';
 import { db, type Account, type Channel, type Conversation } from './store.js';
 import { sendVia } from './engine/transports.js';
 import { htmlToText } from './engine/template.js';
+import type { MailFacts } from './ai/triage.js';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
@@ -36,7 +37,7 @@ export async function sendReply(conv: Conversation, text: string): Promise<{ san
 export const channelLabel: Record<Channel, string> = { email: 'Email', whatsapp: 'WhatsApp', instagram: 'Instagram', messenger: 'Messenger' };
 
 /* ---------------- IMAP polling (email inbox) ---------------- */
-type Ingest = (ev: { channel: 'email'; handle: string; name: string; subject: string; text: string; accountId: string }) => Promise<void>;
+export type InboundHandler = (f: MailFacts, accountId: string, uid: number) => Promise<{ action: 'keep' | 'hold' | 'trash'; applied: boolean; skipped?: boolean }>;
 const lastPoll = new Map<string, { at: string; error: string }>();
 export const imapStatus = (id: string) => lastPoll.get(id);
 
@@ -44,24 +45,54 @@ export const IMAP_DEFAULTS: Record<string, { host: string; port: number; secure:
   hostinger: { host: 'imap.hostinger.com', port: 993, secure: true },
 };
 
-async function pollOne(acc: Account, ingest: Ingest) {
-  const cfg = acc.imap;
-  if (!cfg?.enabled || !acc.pass) return;
-  const c = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: { user: acc.user || acc.fromEmail, pass: acc.pass }, logger: false });
+const imapClient = (acc: Account) => {
+  const cfg = acc.imap!;
+  return new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: { user: acc.user || acc.fromEmail, pass: acc.pass || '' }, logger: false });
+};
+
+/** Finds the mailbox's Trash folder by its special-use flag, then by common names. */
+async function trashPath(c: ImapFlow): Promise<string> {
+  const boxes = await c.list();
+  return boxes.find((b) => b.specialUse === '\\Trash')?.path
+    ?? boxes.find((b) => /^(inbox\.)?(trash|deleted( items| messages)?)$/i.test(b.path))?.path
+    ?? 'Trash';
+}
+
+export function factsFromParsed(p: Awaited<ReturnType<typeof simpleParser>>): MailFacts | null {
+  const from = p.from?.value?.[0];
+  if (!from?.address) return null;
+  const headers: Record<string, string> = {};
+  p.headers.forEach((v, k) => {
+    const val = typeof v === 'string' ? v : Array.isArray(v) ? v.map(String).join(', ') : (v as { text?: string; value?: unknown })?.text ?? String((v as { value?: unknown })?.value ?? '');
+    headers[k.toLowerCase()] = String(val);
+  });
+  const text = (p.text || (p.html ? htmlToText(String(p.html)) : '')).split(/\n>|\nOn .* wrote:/)[0].trim();
+  const refs = Array.isArray(p.references) ? p.references : p.references ? [p.references] : [];
+  return { from: from.address.toLowerCase(), fromName: from.name || from.address, subject: p.subject || '(no subject)', text, headers, messageId: p.messageId, inReplyTo: p.inReplyTo, references: refs };
+}
+
+async function pollOne(acc: Account, handle: InboundHandler) {
+  if (!acc.imap?.enabled || !acc.pass) return;
+  const c = imapClient(acc);
   try {
     await c.connect();
     const lock = await c.getMailboxLock('INBOX');
     try {
-      const uids = (await c.search({ seen: false })) || [];
-      for (const uid of uids.slice(0, 20)) {
-        const msg = await c.fetchOne(String(uid), { source: true });
+      const uids = (await c.search({ seen: false }, { uid: true })) || [];
+      let trash = '';
+      for (const uid of uids.slice(0, 25)) {
+        const msg = await c.fetchOne(String(uid), { source: true }, { uid: true });
         if (!msg || !msg.source) continue;
-        const p = await simpleParser(msg.source);
-        const from = p.from?.value?.[0];
-        if (!from?.address || from.address.toLowerCase() === acc.fromEmail.toLowerCase()) { await c.messageFlagsAdd(String(uid), ['\\Seen']); continue; }
-        const text = (p.text || (p.html ? htmlToText(String(p.html)) : '')).split(/\n>|\nOn .* wrote:/)[0].trim();
-        await ingest({ channel: 'email', handle: from.address.toLowerCase(), name: from.name || from.address, subject: p.subject || '(no subject)', text, accountId: acc.id });
-        await c.messageFlagsAdd(String(uid), ['\\Seen']);
+        const f = factsFromParsed(await simpleParser(msg.source));
+        if (!f || f.from === acc.fromEmail.toLowerCase()) { await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }); continue; }
+        const r = await handle(f, acc.id, uid);
+        if (r.skipped) continue;
+        if (r.action === 'trash' && r.applied) {
+          trash ||= await trashPath(c);
+          await c.messageMove(String(uid), trash, { uid: true }); // reversible: never EXPUNGE/delete outright
+        } else if (r.action !== 'trash') {
+          await c.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+        }
       }
     } finally { lock.release(); }
     lastPoll.set(acc.id, { at: new Date().toISOString(), error: '' });
@@ -70,9 +101,28 @@ async function pollOne(acc: Account, ingest: Ingest) {
   } finally { await c.logout().catch(() => undefined); }
 }
 
-export function startImapPolling(ingest: Ingest) {
+/** Moves a previously trashed message back to the inbox (found by Message-ID). */
+export async function restoreFromTrash(acc: Account, messageId: string): Promise<boolean> {
+  if (!acc.imap?.enabled || !messageId) return false;
+  const c = imapClient(acc);
+  try {
+    await c.connect();
+    const trash = await trashPath(c);
+    const lock = await c.getMailboxLock(trash);
+    try {
+      const uids = (await c.search({ header: { 'message-id': messageId } }, { uid: true })) || [];
+      if (!uids.length) return false;
+      await c.messageMove(uids.map(String).join(','), 'INBOX', { uid: true });
+      return true;
+    } finally { lock.release(); }
+  } finally { await c.logout().catch(() => undefined); }
+}
+
+export function startImapPolling(handle: InboundHandler) {
+  let busy = false;
   setInterval(async () => {
-    if (db.settings.mode !== 'live') return;
-    for (const acc of db.accounts) if (acc.enabled && acc.imap?.enabled) await pollOne(acc, ingest);
+    if (db.settings.mode !== 'live' || busy) return;
+    busy = true;
+    try { for (const acc of db.accounts) if (acc.enabled && acc.imap?.enabled) await pollOne(acc, handle); } finally { busy = false; }
   }, 60_000).unref();
 }

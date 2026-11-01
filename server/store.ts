@@ -51,6 +51,7 @@ export interface Recipient {
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped';
   acc: string;
   accId?: string;
+  messageId?: string;
   attempts?: number;
   at: string;
   error: string;
@@ -81,11 +82,39 @@ export interface Conversation {
   messages: Message[];
   analysis?: Analysis;
   status: 'auto_replied' | 'needs_review' | 'replied' | 'closed';
+  held?: boolean;
+  heldReason?: string;
   unread: boolean;
   updatedAt: string;
 }
 
+export interface AgentSettings {
+  enabled: boolean;
+  /** When true the agent only logs what it WOULD trash and never touches a mailbox. */
+  dryRun: boolean;
+  trashThreshold: number;
+  allowList: string[];
+  blockList: string[];
+}
+
+export interface AgentLogEntry {
+  id: string;
+  at: string;
+  accountId: string;
+  from: string;
+  subject: string;
+  category: string;
+  confidence: number;
+  action: 'trashed' | 'would_trash' | 'kept' | 'held';
+  reason: string;
+  engine: 'gemini' | 'heuristic' | 'rule';
+  messageId: string;
+  key: string;
+  restored?: boolean;
+}
+
 export interface Settings {
+  agent: AgentSettings;
   mode: 'sandbox' | 'live';
   publicUrl: string;
   testEmail: string;
@@ -100,7 +129,10 @@ export interface Settings {
   meta: { pageToken: string; appSecret: string; verifyToken: string };
 }
 
+export const DEFAULT_AGENT: AgentSettings = { enabled: true, dryRun: true, trashThreshold: 0.9, allowList: [], blockList: [] };
+
 export const DEFAULT_SETTINGS: Settings = {
+  agent: DEFAULT_AGENT,
   mode: 'sandbox', publicUrl: process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '', testEmail: '', autoUnsub: true,
   defaultMin: 10, defaultMax: 30,
   aiEnabled: true, autopilot: true, confidenceThreshold: 0.85,
@@ -109,7 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
   meta: { pageToken: '', appSecret: '', verifyToken: '' },
 };
 
-interface Db { accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[] }
+interface Db { accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[]; agentLog: AgentLogEntry[] }
 
 const DB_FILE = path.join(DATA, 'db.json');
 function readJSON<T>(f: string, def: T): T { try { return JSON.parse(fs.readFileSync(f, 'utf8')) as T; } catch { return def; } }
@@ -121,8 +153,10 @@ export const db: Db = {
   campaigns: loaded.campaigns ?? [],
   suppress: loaded.suppress ?? [],
   conversations: loaded.conversations ?? [],
+  agentLog: loaded.agentLog ?? [],
   settings: {
     ...DEFAULT_SETTINGS, ...(loaded.settings ?? {}),
+    agent: { ...DEFAULT_AGENT, ...(loaded.settings?.agent ?? {}) },
     whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(loaded.settings?.whatsapp ?? {}) },
     meta: { ...DEFAULT_SETTINGS.meta, ...(loaded.settings?.meta ?? {}) },
   },

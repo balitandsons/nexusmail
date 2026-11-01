@@ -7,9 +7,10 @@ import { markDirty, suppressSet } from './store.js';
 import { parseUnsub } from './engine/template.js';
 import { bootQueue } from './engine/queue.js';
 import { startImapPolling } from './channels.js';
-import { ingest } from './inbox.js';
+import { processInbound } from './agent.js';
 import api from './routes/api.js';
 import { inboxRouter, webhookRouter } from './routes/omni.js';
+import agentRouter from './routes/agent.js';
 
 let PASSWORD = process.env.ADMIN_PASSWORD || '';
 if (!PASSWORD || PASSWORD === 'change-me-to-something-long') {
@@ -84,6 +85,7 @@ app.use('/api', (req, res, next) => {
 app.get('/api/me', (_req, res) => res.json({ ok: true }));
 app.use('/api', api);
 app.use('/api', inboxRouter);
+app.use('/api', agentRouter);
 
 /* static client */
 const DIST = path.join(ROOT, 'dist');
@@ -95,6 +97,6 @@ app.use((err: Error & { status?: number; code?: string }, _req: Request, res: Re
   res.status(err.status || 400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 25 MB each).' : err.message }));
 
 bootQueue(process.env.RESUME_ON_START !== 'false');
-startImapPolling((ev) => ingest({ channel: 'email', handle: ev.handle, name: ev.name, subject: ev.subject, text: ev.text, accountId: ev.accountId }).then(() => undefined));
+startImapPolling(processInbound);
 
 app.listen(PORT, '0.0.0.0', () => console.log(`NexusMail running → http://localhost:${PORT}${fs.existsSync(DIST) ? '' : '  (API only — run "npm run dev" for the UI, or "npm run build" first)'}`));

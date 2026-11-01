@@ -93,7 +93,7 @@ async function worker(run: Run, c: Campaign, acc: Account, i: number, atts: Retu
     let jitter = 0;
     try {
       const res = await sendVia(acc, buildMessage(c, r, acc, atts));
-      r.status = 'sent'; r.error = ''; r.at = new Date().toISOString();
+      r.status = 'sent'; r.error = ''; r.at = new Date().toISOString(); r.messageId = res.messageId;
       bump(acc); recordOutcome(acc, 'sent'); st.sent++; st.fails = 0; st.error = '';
       markDirty();
       jitter = Math.round((c.minDelay + Math.random() * (c.maxDelay - c.minDelay)) * delayFactor(acc));

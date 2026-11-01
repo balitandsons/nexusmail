@@ -4,6 +4,7 @@ import { fail, safeEq, str } from '../util.js';
 import { db, markDirty, type Channel } from '../store.js';
 import { h } from './api.js';
 import { humanReply, ingest, sampleEvent, type InboundEvent } from '../inbox.js';
+import { processInbound } from '../agent.js';
 import { analyze } from '../ai/agent.js';
 import { log } from '../engine/queue.js';
 
@@ -100,8 +101,10 @@ webhookRouter.post('/webhooks/email', express.json({ limit: '2mb' }), (req, res)
   const token = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
   const expected = db.settings.meta.verifyToken || db.settings.whatsapp.verifyToken;
   if (!expected || !token || !safeEq(token, expected)) return res.sendStatus(403);
-  const { from, name, subject, text } = req.body || {};
+  const { from, name, subject, text, messageId, inReplyTo, headers } = req.body || {};
   if (!from || !text) return res.status(400).json({ error: 'from and text are required' });
   res.sendStatus(202);
-  ingest({ channel: 'email', handle: String(from), name: str(name) || String(from), subject: str(subject), text: String(text) }).catch((e) => log(undefined, 'Email webhook ingest failed: ' + e.message, 'err'));
+  const lc: Record<string, string> = {};
+  for (const [k, v] of Object.entries((headers as Record<string, unknown>) || {})) lc[k.toLowerCase()] = String(v);
+  processInbound({ from: String(from).toLowerCase(), fromName: str(name) || String(from), subject: str(subject), text: String(text), headers: lc, messageId: messageId ? String(messageId) : undefined, inReplyTo: inReplyTo ? String(inReplyTo) : undefined }, 'webhook').catch((e) => log(undefined, 'Email webhook ingest failed: ' + e.message, 'err'));
 });

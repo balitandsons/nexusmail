@@ -6,7 +6,7 @@ const clamp01 = (n: unknown) => { const v = Number(n); return Number.isFinite(v)
 
 const MODEL = () => process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 let client: GoogleGenAI | null = null;
-const getClient = () => (process.env.GEMINI_API_KEY ? (client ||= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })) : null);
+export const getClient = () => (process.env.GEMINI_API_KEY ? (client ||= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })) : null);
 export const aiConfigured = () => !!process.env.GEMINI_API_KEY;
 export const aiModel = MODEL;
 

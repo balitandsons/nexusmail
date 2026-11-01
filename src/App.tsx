@@ -6,13 +6,15 @@ import Campaigns from './views/Campaigns';
 import LiveQueue from './views/LiveQueue';
 import Inbox from './views/Inbox';
 import ApiHub from './views/ApiHub';
+import Agent from './views/Agent';
 
-export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'api';
+export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'agent' | 'api';
 const NAV: { id: View; label: string; icon: string; title: string }[] = [
   { id: 'mailboxes', label: 'Mailbox Accounts', icon: 'server', title: 'Mailbox Accounts & Multi-Provider Pools' },
   { id: 'campaigns', label: 'Bulk Campaigns', icon: 'layers', title: 'Campaign Orchestrator & Recipient Lists' },
   { id: 'queue', label: 'Live Queue & Pacing', icon: 'send', title: 'Active Dispatch Queue & Jitter Pacing' },
   { id: 'inbox', label: 'AI Omnichannel Inbox', icon: 'inbox', title: 'Omnichannel Inbound Hub & AI Autopilot' },
+  { id: 'agent', label: 'Inbox Agent', icon: 'shield', title: 'Inbox Agent: Triage, Filter & Trash' },
   { id: 'api', label: 'API & Webhooks', icon: 'sliders', title: 'API & Webhook Hub' },
 ];
 
@@ -90,6 +92,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           {view === 'campaigns' && <Campaigns {...ctx} />}
           {view === 'queue' && <LiveQueue {...ctx} />}
           {view === 'inbox' && <Inbox {...ctx} onChange={ctx.refreshAll} />}
+          {view === 'agent' && <Agent {...ctx} />}
           {view === 'api' && <ApiHub {...ctx} />}
         </main>
       </div>

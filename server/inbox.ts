@@ -11,6 +11,8 @@ export interface InboundEvent {
   subject?: string;
   text: string;
   accountId?: string;
+  /** Set by the inbox agent when the mail must be reviewed by a person and never auto-answered. */
+  hold?: string;
 }
 
 const now = () => new Date().toISOString();
@@ -39,6 +41,7 @@ export async function ingest(ev: InboundEvent): Promise<Conversation> {
 
   const a = await analyze(conv, ev.text);
   conv.analysis = a;
+  if (ev.hold) { conv.held = true; conv.heldReason = ev.hold; }
 
   if (a.intent === 'unsubscribe') {
     if (conv.channel === 'email') suppressSet.add(conv.contactHandle);
@@ -49,10 +52,8 @@ export async function ingest(ev: InboundEvent): Promise<Conversation> {
   }
   if (a.intent === 'spam') { conv.status = 'closed'; markDirty(); return conv; }
 
-  const eligible = db.settings.autopilot && a.engine === 'gemini'
-    ? a.confidence >= db.settings.confidenceThreshold
-    // The keyword fallback is never trusted to send unreviewed in Live mode; it still auto-sends in Sandbox for demos.
-    : db.settings.autopilot && db.settings.mode === 'sandbox' && a.confidence >= db.settings.confidenceThreshold;
+  const trusted = a.engine === 'gemini' || db.settings.mode === 'sandbox'; // keyword fallback never sends unreviewed in Live mode
+  const eligible = !ev.hold && db.settings.autopilot && trusted && a.confidence >= db.settings.confidenceThreshold;
 
   if (eligible && a.suggestedReply.trim()) {
     try {
