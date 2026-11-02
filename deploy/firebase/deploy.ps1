@@ -11,28 +11,48 @@ Set-Location (Join-Path $PSScriptRoot '..\..')
 function Need($cmd, $hint) { if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "$cmd not found. $hint" } }
 Need gcloud 'Install: https://cloud.google.com/sdk/docs/install then reopen PowerShell.'
 Need firebase 'Install: npm i -g firebase-tools'
-function Run { & $args[0] $args[1..($args.Length-1)]; if ($LASTEXITCODE -ne 0) { throw "Command failed: $($args -join ' ')" } }
-function Quiet { & $args[0] $args[1..($args.Length-1)] *> $null; return ($LASTEXITCODE -eq 0) }
+# Native commands: splat the argument array (`@rest`) so each token reaches gcloud separately, and judge success by exit code,
+# because Windows PowerShell 5.1 treats gcloud's progress output on stderr as an error.
+function Run {
+  $cmd = $args[0]; $rest = @($args | Select-Object -Skip 1)
+  $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { & $cmd @rest; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
+  if ($code -ne 0) { throw "Command failed ($code): $cmd $($rest -join ' ')" }
+}
+function Quiet {
+  $cmd = $args[0]; $rest = @($args | Select-Object -Skip 1)
+  $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { & $cmd @rest *> $null; $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
+  return ($code -eq 0)
+}
+function Out-Of($cmd, $rest) { # capture stdout of a native command
+  $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { $o = & $cmd @rest 2>$null } finally { $ErrorActionPreference = $prev }
+  return ($o | Out-String).Trim()
+}
 
 Run gcloud config set project $Project
 Write-Host '== Enabling APIs'
 Run gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com firebasehosting.googleapis.com storage.googleapis.com
 
-$Num = (& gcloud projects describe $Project --format='value(projectNumber)').Trim()
+$Num = Out-Of 'gcloud' @('projects','describe',$Project,'--format=value(projectNumber)')
+if (-not $Num) { throw "Cannot read project $Project. Check the project id and that you ran: gcloud auth login" }
 $SA  = "$Num-compute@developer.gserviceaccount.com"
 
 Write-Host "== Data bucket gs://$Bucket"
 if (-not (Quiet gcloud storage buckets describe "gs://$Bucket")) { Run gcloud storage buckets create "gs://$Bucket" --location=$Region --uniform-bucket-level-access }
-Run gcloud storage buckets add-iam-policy-binding "gs://$Bucket" --member="serviceAccount:$SA" --role=roles/storage.objectAdmin | Out-Null
+$member = "serviceAccount:$SA"
+Run gcloud storage buckets add-iam-policy-binding "gs://$Bucket" "--member=$member" --role=roles/storage.objectAdmin | Out-Null
 
 function Put-Secret($name, $value) {
-  $tmp = New-TemporaryFile
+  $tmp = New-TemporaryFile; $file = $tmp.FullName
   try {
-    [IO.File]::WriteAllText($tmp.FullName, $value)
-    if (Quiet gcloud secrets describe $name) { Run gcloud secrets versions add $name --data-file=$($tmp.FullName) | Out-Null }
-    else { Run gcloud secrets create $name --data-file=$($tmp.FullName) | Out-Null }
+    [IO.File]::WriteAllText($file, $value)
+    if (Quiet gcloud secrets describe $name) { Run gcloud secrets versions add $name "--data-file=$file" | Out-Null }
+    else { Run gcloud secrets create $name "--data-file=$file" | Out-Null }
   } finally { Remove-Item $tmp -Force }
-  Run gcloud secrets add-iam-policy-binding $name --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor | Out-Null
+  $m = "serviceAccount:$SA"
+  Run gcloud secrets add-iam-policy-binding $name "--member=$m" --role=roles/secretmanager.secretAccessor | Out-Null
 }
 
 $Secrets = 'ADMIN_PASSWORD=nexusmail-admin-password:latest'
