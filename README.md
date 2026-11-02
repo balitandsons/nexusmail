@@ -18,7 +18,7 @@ npm run build && npm start  # http://localhost:3000
 npm test                    # unit tests for templating, CSV parsing, health scoring
 ```
 
-Hosting: see [DEPLOY-FIREBASE.md](DEPLOY-FIREBASE.md) (Firebase + Cloud Run) or [DEPLOY.md](DEPLOY.md) (VPS / Google VM).
+Hosting: see [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md) (Hostinger Node.js apps), [DEPLOY-FIREBASE.md](DEPLOY-FIREBASE.md) (Firebase + Cloud Run) or [DEPLOY.md](DEPLOY.md) (VPS / Google VM).
 
 ## Modes
 

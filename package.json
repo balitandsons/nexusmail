@@ -4,13 +4,18 @@
   "private": true,
   "type": "module",
   "description": "Multi-provider bulk mailer (Hostinger, Brevo, ZeptoMail, SMTP) with AI omnichannel inbox",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "start": "tsx server/index.ts",
-    "test": "tsx --test server/test/*.test.ts"
+    "test": "tsx --test server/test/*.test.ts",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist-server/index.mjs",
+    "start:prod": "node app.mjs",
+    "package:hostinger": "node scripts/package-hostinger.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.25.0",
@@ -33,6 +38,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
+    "esbuild": "^0.24.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.0"
   }
