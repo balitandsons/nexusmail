@@ -5,3 +5,4 @@ data
 dist-server
 hostinger-package
 nexusmail-hostinger.zip
+!downloads/nexusmail-hostinger.zip
