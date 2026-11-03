@@ -63,6 +63,15 @@ Every unread email in IMAP-enabled mailboxes (tick *Read replies via IMAP* on a 
 
 Safety: **Dry run is on by default**: it only logs "would trash" until you untick it on the *Inbox Agent* page. Nothing is ever permanently deleted; the log has a *Restore* button (moves it back and allow-lists the sender). Without a `GEMINI_API_KEY` the offline classifier can only keep or hold, never trash. Use the *Test an email* box to check decisions before going live.
 
+## Security and team access
+
+* **Users and roles.** Sign in with a username and password. On first start the user `admin` is created from `ADMIN_PASSWORD`. Under *Team & Security* an admin adds people as **admin** (everything), **operator** (campaigns, inbox, agent, do-not-send list, mailbox tests) or **viewer** (read only).
+* **2FA.** Each user can turn on authenticator-app codes (with 8 one-time recovery codes). An admin can reset a user's 2FA.
+* **Audit log.** Every change (sign-ins, failed attempts, mailbox/settings/campaign/agent/user actions) is recorded with user and IP. Request bodies and secrets are never logged.
+* **Secrets at rest.** Set `DATA_ENCRYPTION_KEY` (a long random string) in the environment and mailbox passwords, API keys, Meta tokens and 2FA seeds are stored AES-256-GCM encrypted in `db.json`. Existing plain values are encrypted on the next save. Keep the key somewhere safe: without it the encrypted values cannot be read and the app refuses to start. The key must not be stored in the data folder.
+* **Lock-out recovery.** Set `ADMIN_PASSWORD` to a new value and `RESET_ADMIN=true`, restart once, sign in as `admin`, then remove `RESET_ADMIN`.
+* Passwords are hashed with scrypt; login attempts are throttled per IP and per user; a CSP and other security headers are sent.
+
 ## Deliverability and rules
 
 * Email only people who opted in or are your customers (CAN-SPAM, DPDP, GDPR and every provider's terms forbid unsolicited bulk mail).

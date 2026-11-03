@@ -7,25 +7,37 @@ import LiveQueue from './views/LiveQueue';
 import Inbox from './views/Inbox';
 import ApiHub from './views/ApiHub';
 import Agent from './views/Agent';
+import Team from './views/Team';
 
-export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'agent' | 'api';
+export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'agent' | 'api' | 'team';
+export interface Me { id: string; username: string; name: string; role: 'admin' | 'operator' | 'viewer'; totpEnabled: boolean }
 const NAV: { id: View; label: string; icon: string; title: string }[] = [
   { id: 'mailboxes', label: 'Mailbox Accounts', icon: 'server', title: 'Mailbox Accounts & Multi-Provider Pools' },
   { id: 'campaigns', label: 'Bulk Campaigns', icon: 'layers', title: 'Campaign Orchestrator & Recipient Lists' },
   { id: 'queue', label: 'Live Queue & Pacing', icon: 'send', title: 'Active Dispatch Queue & Jitter Pacing' },
   { id: 'inbox', label: 'AI Omnichannel Inbox', icon: 'inbox', title: 'Omnichannel Inbound Hub & AI Autopilot' },
   { id: 'agent', label: 'Inbox Agent', icon: 'shield', title: 'Inbox Agent: Triage, Filter & Trash' },
+  { id: 'team', label: 'Team & Security', icon: 'users', title: 'Team, Security & Audit Log' },
   { id: 'api', label: 'API & Webhooks', icon: 'sliders', title: 'API & Webhook Hub' },
 ];
 
-function Login({ onDone }: { onDone: () => void }) {
+function Login({ onDone }: { onDone: (u: Me) => void }) {
+  const [username, setUsername] = useState('admin');
   const [pw, setPw] = useState('');
+  const [code, setCode] = useState('');
+  const [need2fa, setNeed2fa] = useState(false);
   const [err, setErr] = useState('');
   return (
     <div className="login">
-      <form onSubmit={async (e) => { e.preventDefault(); try { await api('/login', 'POST', { password: pw }); onDone(); } catch (x) { setErr((x as Error).message); } }}>
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        try { const r = await api<{ user: Me }>('/login', 'POST', { username, password: pw, code }); onDone(r.user); }
+        catch (x) { const m = (x as Error).message; if ((x as { needs2fa?: boolean }).needs2fa || /6-digit/.test(m)) setNeed2fa(true); setErr(m); }
+      }}>
         <div className="brand" style={{ padding: 0 }}><div className="logo">NM</div><div><b>NexusMail</b><small>Outreach &amp; AI Engine</small></div></div>
-        <label className="f">Admin password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus /></label>
+        <label className="f">Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" /></label>
+        <label className="f">Password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus autoComplete="current-password" /></label>
+        {need2fa && <label className="f">6-digit code (or a recovery code)<input value={code} onChange={(e) => setCode(e.target.value)} autoFocus inputMode="numeric" autoComplete="one-time-code" /></label>}
         {err && <div className="err">{err}</div>}
         <button className="btn primary" style={{ justifyContent: 'center' }}>Sign in</button>
       </form>
@@ -33,7 +45,7 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell({ onLogout, me }: { onLogout: () => void; me: Me }) {
   const [view, setView] = useState<View>((localStorage.getItem('nm-view') as View) || 'mailboxes');
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const settings = usePoll<Settings>('/settings', 0);
@@ -75,6 +87,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           <div><span><Icon n="shield" size={13} /> Pool Health</span><b>{mbs.length ? pool + '%' : '–'}</b></div>
           <div><span><Icon n="sparkle" size={13} /> AI Auto-Replied</span><b>{inbox.data?.counts.autoReplied ?? 0}</b></div>
           <div><span><Icon n="activity" size={13} /> Sent Today</span><b>{sentToday}</b></div>
+          <div className="muted" style={{ fontSize: 12 }}>{me.name} · {me.role}</div>
           <button className="btn ghost sm" onClick={async () => { await api('/logout', 'POST'); onLogout(); }}>Sign out</button>
         </div>
       </aside>
@@ -93,6 +106,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           {view === 'queue' && <LiveQueue {...ctx} />}
           {view === 'inbox' && <Inbox {...ctx} onChange={ctx.refreshAll} />}
           {view === 'agent' && <Agent {...ctx} />}
+          {view === 'team' && <Team me={me} />}
           {view === 'api' && <ApiHub {...ctx} />}
         </main>
       </div>
@@ -104,15 +118,16 @@ export interface ViewCtx { settings: Settings | null; refreshSettings: () => voi
 
 export default function App() {
   const [auth, setAuth] = useState<'unknown' | 'in' | 'out'>('unknown');
+  const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
-    api('/me').then(() => setAuth('in')).catch(() => setAuth('out'));
+    api<{ user: Me }>('/me').then((r) => { setMe(r.user); setAuth('in'); }).catch(() => setAuth('out'));
     const f = () => setAuth('out');
     window.addEventListener('nm-auth', f);
     return () => window.removeEventListener('nm-auth', f);
   }, []);
   return (
     <ToastProvider>
-      {auth === 'unknown' ? null : auth === 'out' ? <Login onDone={() => setAuth('in')} /> : <Shell onLogout={() => setAuth('out')} />}
+      {auth === 'unknown' ? null : auth === 'out' || !me ? <Login onDone={(u) => { setMe(u); setAuth('in'); }} /> : <Shell me={me} onLogout={() => setAuth('out')} />}
     </ToastProvider>
   );
 }

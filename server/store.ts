@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA, RECIPS } from './util.js';
+import { decrypt, encrypt } from './crypto.js';
 
 export type Provider = 'hostinger' | 'smtp' | 'brevo' | 'zepto';
 
@@ -141,19 +142,56 @@ export const DEFAULT_SETTINGS: Settings = {
   meta: { pageToken: '', appSecret: '', verifyToken: '' },
 };
 
-interface Db { accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[]; agentLog: AgentLogEntry[] }
+export type Role = 'admin' | 'operator' | 'viewer';
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: Role;
+  passHash: string;
+  /** Bumped on password change/reset so older sessions stop working. */
+  sessionVersion: number;
+  totpSecret?: string;
+  totpPending?: string;
+  totpEnabled?: boolean;
+  recovery?: string[]; // sha256 of unused recovery codes
+  disabled?: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+export interface AuditEntry { id: string; at: string; user: string; role: string; method: string; path: string; status: number; ip: string; note?: string }
+
+interface Db {
+  schema: number;
+  users: User[];
+  audit: AuditEntry[]; accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[]; agentLog: AgentLogEntry[] }
 
 const DB_FILE = path.join(DATA, 'db.json');
 function readJSON<T>(f: string, def: T): T { try { return JSON.parse(fs.readFileSync(f, 'utf8')) as T; } catch { return def; } }
 function writeJSON(f: string, obj: unknown) { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(obj)); fs.renameSync(t, f); }
 
+type Fn = (v: string) => string;
+/** Applies fn to every secret field of a db snapshot. */
+function mapSecrets(d: Partial<Db>, fn: Fn) {
+  for (const a of d.accounts ?? []) { if (a.pass) a.pass = fn(a.pass); if (a.apiKey) a.apiKey = fn(a.apiKey); }
+  const st = d.settings;
+  if (st?.whatsapp?.token) st.whatsapp.token = fn(st.whatsapp.token);
+  if (st?.meta?.pageToken) st.meta.pageToken = fn(st.meta.pageToken);
+  if (st?.meta?.appSecret) st.meta.appSecret = fn(st.meta.appSecret);
+  for (const u of d.users ?? []) { if (u.totpSecret) u.totpSecret = fn(u.totpSecret); if (u.totpPending) u.totpPending = fn(u.totpPending); }
+}
+
 const loaded = readJSON<Partial<Db>>(DB_FILE, {});
+mapSecrets(loaded, decrypt);
 export const db: Db = {
   accounts: loaded.accounts ?? [],
   campaigns: loaded.campaigns ?? [],
   suppress: loaded.suppress ?? [],
   conversations: loaded.conversations ?? [],
   agentLog: loaded.agentLog ?? [],
+  schema: 2,
+  users: loaded.users ?? [],
+  audit: loaded.audit ?? [],
   settings: {
     ...DEFAULT_SETTINGS, ...(loaded.settings ?? {}),
     agent: { ...DEFAULT_AGENT, ...(loaded.settings?.agent ?? {}) },
@@ -177,7 +215,12 @@ export function dropRecips(cid: string) { recipCache.delete(cid); dirty.delete(c
 export function flush() {
   for (const k of [...dirty]) {
     try {
-      if (k === 'db') { db.suppress = [...suppressSet]; writeJSON(DB_FILE, db); }
+      if (k === 'db') {
+        db.suppress = [...suppressSet];
+        const snap = JSON.parse(JSON.stringify(db)) as Db;
+        mapSecrets(snap, encrypt);
+        writeJSON(DB_FILE, snap);
+      }
       else if (recipCache.has(k)) writeJSON(recipFile(k), recipCache.get(k));
       dirty.delete(k);
     } catch (e) { console.error('Save failed:', (e as Error).message); }

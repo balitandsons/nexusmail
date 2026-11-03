@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export class ApiError extends Error { constructor(msg: string, public status: number) { super(msg); } }
+export class ApiError extends Error { constructor(msg: string, public status: number, public needs2fa = false) { super(msg); } }
 
 export async function api<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
@@ -12,7 +12,7 @@ export async function api<T = any>(path: string, method = 'GET', body?: unknown)
   });
   if (res.status === 401 && path !== '/login') window.dispatchEvent(new Event('nm-auth'));
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(j.error || res.statusText, res.status);
+  if (!res.ok) throw new ApiError(j.error || res.statusText, res.status, !!j.needs2fa);
   return j as T;
 }
 

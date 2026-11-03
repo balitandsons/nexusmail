@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { PORT, ROOT, esc, hmac, safeEq, str } from './util.js';
-import { markDirty, suppressSet } from './store.js';
+import { PORT, ROOT, esc } from './util.js';
+import { db, markDirty, suppressSet } from './store.js';
+import { auditMiddleware, bootstrapAdmin, requireUser } from './auth.js';
+import accountRouter, { authRouter } from './routes/account.js';
 import { parseUnsub } from './engine/template.js';
 import { bootQueue } from './engine/queue.js';
 import { startImapPolling } from './channels.js';
@@ -13,17 +15,23 @@ import { inboxRouter, webhookRouter } from './routes/omni.js';
 import agentRouter from './routes/agent.js';
 
 let PASSWORD = process.env.ADMIN_PASSWORD || '';
-if (!PASSWORD || PASSWORD === 'change-me-to-something-long') {
+if (!db.users.length && (!PASSWORD || PASSWORD === 'change-me-to-something-long')) {
   PASSWORD = crypto.randomBytes(9).toString('base64url');
-  fs.appendFileSync(path.join(ROOT, '.env'), `\nADMIN_PASSWORD=${PASSWORD}\n`);
-  console.log(`\n  No ADMIN_PASSWORD was set. Generated one and saved it to .env:\n\n     ${PASSWORD}\n`);
+  try { fs.appendFileSync(path.join(ROOT, '.env'), `\nADMIN_PASSWORD=${PASSWORD}\n`); } catch { /* read-only host */ }
+  console.log(`\n  No ADMIN_PASSWORD was set. Generated one for the user "admin":\n\n     ${PASSWORD}\n`);
 }
+await bootstrapAdmin(PASSWORD);
 
 const app = express();
 app.disable('x-powered-by');
 app.get('/healthz', (_req, res) => void res.json({ ok: true }));
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
-app.use((_req, res, next) => { res.set('X-Frame-Options', 'DENY'); res.set('Referrer-Policy', 'same-origin'); next(); });
+app.use((req, res, next) => {
+  res.set('X-Frame-Options', 'DENY'); res.set('Referrer-Policy', 'same-origin'); res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=15552000');
+  next();
+});
 
 // Public, signature/token-verified webhooks need the raw body, so they mount before the JSON parser.
 app.use(webhookRouter);
@@ -50,42 +58,11 @@ app.post('/u/:token', (req, res) => {
   res.send(unsubPage('Unsubscribed', `${esc(email)} has been removed. You won't receive further emails from us.`));
 });
 
-/* auth */
-// Firebase Hosting forwards only a cookie named __session to Cloud Run, so the login cookie must use that name.
-const COOKIE = '__session';
-const SESSION_DAYS = 14;
-function cookies(req: Request) {
-  const out: Record<string, string> = {};
-  for (const p of (req.headers.cookie || '').split(';')) { const i = p.indexOf('='); if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim()); }
-  return out;
-}
-function isAuthed(req: Request) {
-  const v = cookies(req)[COOKIE];
-  if (!v) return false;
-  const [exp, sig] = v.split('.');
-  return !!sig && Number(exp) > Date.now() && safeEq(sig, hmac('s' + exp));
-}
-const loginFails = new Map<string, { n: number; t: number }>();
-app.post('/api/login', (req, res) => {
-  res.set('Cache-Control', 'private, no-store');
-  const ip = req.ip || '';
-  const f = loginFails.get(ip) || { n: 0, t: Date.now() };
-  if (Date.now() - f.t > 15 * 60000) { f.n = 0; f.t = Date.now(); }
-  if (f.n >= 10) return void res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
-  if (!safeEq(str(req.body?.password), PASSWORD)) { f.n++; loginFails.set(ip, f); return void res.status(401).json({ error: 'Wrong password.' }); }
-  loginFails.delete(ip);
-  const exp = Date.now() + SESSION_DAYS * 86400000;
-  res.set('Set-Cookie', `${COOKIE}=${exp}.${hmac('s' + exp)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${req.secure ? '; Secure' : ''}`);
-  res.json({ ok: true });
-});
-app.post('/api/logout', (_req, res) => { res.set('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`); res.json({ ok: true }); });
+/* auth: public login/logout, then every other /api route needs a valid session and an allowed role */
+app.use(authRouter);
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
-app.use('/api', (req, res, next) => {
-  if (!isAuthed(req)) return void res.status(401).json({ error: 'Not logged in' });
-  if (req.method !== 'GET' && req.get('x-nm') !== '1') return void res.status(403).json({ error: 'Bad request' });
-  next();
-});
-app.get('/api/me', (_req, res) => res.json({ ok: true }));
+app.use('/api', requireUser, auditMiddleware);
+app.use('/api', accountRouter);
 app.use('/api', api);
 app.use('/api', inboxRouter);
 app.use('/api', agentRouter);

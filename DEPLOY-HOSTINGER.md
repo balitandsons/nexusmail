@@ -27,6 +27,7 @@ npm run package:hostinger      # creates nexusmail-hostinger.zip
    | `PUBLIC_URL` | `https://your-domain.com` |
    | `GEMINI_API_KEY` | your (new) Gemini key |
    | `GEMINI_MODEL` | `gemini-3.8-flash` |
+   | `DATA_ENCRYPTION_KEY` | a long random string (optional but recommended): encrypts mailbox passwords and tokens in `db.json`. Save it in a password manager; if it is lost the stored passwords cannot be recovered. |
 
    Do not set `PORT`; Hostinger provides it.
 4. Deploy / Restart the app, open your domain, sign in.
@@ -47,6 +48,9 @@ firebase hosting:disable --project balit-and-sons-technologies
 gcloud storage rm -r gs://balit-and-sons-technologies-nexusmail-data
 ```
 Then in the Firebase console set a budget alert so you notice any leftover charge. Update your Meta webhook URLs to the new domain.
+
+## Users and sign-in
+The first start creates the user `admin` with your `ADMIN_PASSWORD`. Change it and turn on 2FA under **Team & Security**, and add colleagues there with a role. After that, `ADMIN_PASSWORD` is only used for recovery (`RESET_ADMIN=true`, see README).
 
 ## Things to know
 - **Keep it awake.** Shared plans may stop an idle Node app, which would pause the sending queue and IMAP checks. Add a free monitor (UptimeRobot, 5-minute interval) that visits `https://your-domain.com/healthz`.
