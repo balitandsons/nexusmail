@@ -8,12 +8,14 @@ import { auditMiddleware, bootstrapAdmin, requireUser } from './auth.js';
 import accountRouter, { authRouter } from './routes/account.js';
 import { parseUnsub } from './engine/template.js';
 import { bootQueue } from './engine/queue.js';
+import { markUnsubscribed } from './engine/bounces.js';
 import { startImapPolling } from './channels.js';
 import { processInbound } from './agent.js';
 import api from './routes/api.js';
 import { inboxRouter, webhookRouter } from './routes/omni.js';
 import agentRouter from './routes/agent.js';
 import mailRouter from './routes/mail.js';
+import statsRouter from './routes/stats.js';
 
 let PASSWORD = process.env.ADMIN_PASSWORD || '';
 if (!db.users.length && (!PASSWORD || PASSWORD === 'change-me-to-something-long')) {
@@ -56,6 +58,7 @@ app.post('/u/:token', (req, res) => {
   const email = parseUnsub(req.params.token);
   if (!email) return void res.status(400).send(unsubPage('Invalid link', 'This unsubscribe link is not valid.'));
   if (!suppressSet.has(email)) { suppressSet.add(email); markDirty(); console.log(`Unsubscribed: ${email}`); }
+  markUnsubscribed(email);
   res.send(unsubPage('Unsubscribed', `${esc(email)} has been removed. You won't receive further emails from us.`));
 });
 
@@ -68,6 +71,7 @@ app.use('/api', api);
 app.use('/api', inboxRouter);
 app.use('/api', agentRouter);
 app.use('/api', mailRouter);
+app.use('/api', statsRouter);
 
 /* static client */
 const DIST = path.join(ROOT, 'dist');

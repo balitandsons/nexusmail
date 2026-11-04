@@ -10,6 +10,7 @@ import { buildMessage, loadAttachments, parseRecipients } from '../engine/templa
 import { active, getCampaign, getLogs, log, pauseCampaign, runs, startCampaign, stats } from '../engine/queue.js';
 import { IMAP_DEFAULTS, imapStatus } from '../channels.js';
 import { aiUsageToday } from '../ai/agent.js';
+import { effectiveLimit, warmupDaysLeft } from '../engine/warmup.js';
 
 export const h = (fn: (req: Request, res: Response) => unknown) => (req: Request, res: Response) => {
   Promise.resolve().then(() => fn(req, res)).catch((e: Error & { status?: number }) => {
@@ -27,7 +28,7 @@ function publicAccount(a: Account) {
   const { apiKey, pass, ...rest } = a;
   const score = healthScore(a);
   return {
-    ...rest, provider: TYPES[a.type], sentToday: sentToday(a), health: score, healthLabel: healthLabel(score),
+    ...rest, provider: TYPES[a.type], sentToday: sentToday(a), effectiveLimit: effectiveLimit(a), warmupDaysLeft: warmupDaysLeft(a), health: score, healthLabel: healthLabel(score),
     resting: a.stats.restUntil > Date.now(),
     apiKeyHint: apiKey ? '••••' + apiKey.slice(-4) : '', hasPass: !!pass,
     imapStatus: imapStatus(a.id) || null,
@@ -42,7 +43,7 @@ function cleanAccount(b: Record<string, any>, old?: Account): Account {
     label: str(b.label), fromName: str(b.fromName), fromEmail: str(b.fromEmail).toLowerCase(), replyTo: str(b.replyTo),
     limit: clampInt(b.limit, 1, 1000000, 100),
     enabled: old ? old.enabled : true,
-    daily: old?.daily, stats: old?.stats ?? newStats(), dns: old?.dns, imap: old?.imap,
+    daily: old?.daily, stats: old?.stats ?? newStats(), dns: old?.dns, imap: old?.imap, warmup: old?.warmup,
   };
   if (t === 'brevo' || t === 'zepto') a.apiKey = str(b.apiKey) || (old && old.type === t ? old.apiKey : '');
   if (t === 'zepto') a.region = ZEPTO_REGIONS.includes(b.region) ? b.region : 'in';
@@ -57,6 +58,11 @@ function cleanAccount(b: Record<string, any>, old?: Account): Account {
       const d = IMAP_DEFAULTS[t] ?? { host: '', port: 993, secure: true };
       a.imap = { enabled: !!im.enabled, host: str(im.host) || d.host, port: clampInt(im.port, 1, 65535, d.port), secure: true };
     }
+  }
+  if (b.warmup) {
+    const w = b.warmup as { enabled?: boolean; startLimit?: number; rampPerDay?: number };
+    a.warmup = { enabled: !!w.enabled, startDate: old?.warmup?.startDate || today(), startLimit: clampInt(w.startLimit, 1, 100000, 20), rampPerDay: clampInt(w.rampPerDay, 1, 10000, 5) };
+    if (w.enabled && old?.warmup && !old.warmup.enabled) a.warmup.startDate = today(); // restarting warm-up starts the ramp again
   }
   if (!EMAIL_RE.test(a.fromEmail)) throw fail('Enter a valid From email.');
   if (a.replyTo && !EMAIL_RE.test(a.replyTo)) throw fail('Reply-to must be a valid email.');
@@ -106,7 +112,7 @@ router.post('/mailboxes/:id/test', h(async (req, res) => {
 }));
 router.post('/mailboxes/:id/dns', h(async (req, res) => {
   const a = getAccount(String(req.params.id));
-  a.dns = await checkDns(a.fromEmail); markDirty(); res.json(a.dns);
+  a.dns = await checkDns(a.fromEmail, a.type); markDirty(); res.json(a.dns);
 }));
 
 /* ---------------- settings + suppression ---------------- */

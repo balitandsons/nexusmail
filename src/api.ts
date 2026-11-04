@@ -39,7 +39,8 @@ export interface Mailbox {
   id: string; type: 'hostinger' | 'smtp' | 'brevo' | 'zepto'; provider: string; label: string; fromName: string; fromEmail: string; replyTo: string;
   limit: number; enabled: boolean; sentToday: number; health: number; healthLabel: string; resting: boolean;
   host?: string; port?: number; secure?: boolean; region?: string; apiKeyHint: string; hasPass: boolean;
-  dns?: { spf: boolean; dkim: boolean; dmarc: boolean; checkedAt: string };
+  dns?: { spf: boolean; dkim: boolean; dmarc: boolean; checkedAt: string; fixes?: string[]; dmarcPolicy?: string };
+  effectiveLimit: number; warmupDaysLeft: number; warmup?: { enabled: boolean; startDate: string; startLimit: number; rampPerDay: number };
   imap?: { enabled: boolean; host: string; port: number };
   imapStatus: { at: string; error: string } | null;
 }

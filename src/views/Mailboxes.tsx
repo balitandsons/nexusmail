@@ -6,7 +6,7 @@ import type { ViewCtx } from '../App';
 type Form = Record<string, any>;
 const blank = (type: Mailbox['type']): Form => ({
   type, label: '', fromName: '', fromEmail: '', replyTo: '', limit: 100, host: type === 'hostinger' ? 'smtp.hostinger.com' : '', port: 465, secure: true,
-  user: '', pass: '', apiKey: '', region: 'in', imapEnabled: false,
+  user: '', pass: '', apiKey: '', region: 'in', imapEnabled: false, warmupEnabled: false, warmupStart: 20, warmupRamp: 5,
 });
 
 function MailboxModal({ initial, editing, onClose, onSaved }: { initial: Form; editing?: Mailbox; onClose: () => void; onSaved: () => void }) {
@@ -18,7 +18,7 @@ function MailboxModal({ initial, editing, onClose, onSaved }: { initial: Form; e
   const save = async () => {
     setBusy(true);
     try {
-      const body = { ...f, imap: smtp ? { enabled: !!f.imapEnabled } : undefined };
+      const body = { ...f, imap: smtp ? { enabled: !!f.imapEnabled } : undefined, warmup: { enabled: !!f.warmupEnabled, startLimit: Number(f.warmupStart), rampPerDay: Number(f.warmupRamp) } };
       const saved = editing ? await api<Mailbox>('/mailboxes/' + editing.id, 'PUT', body) : await api<Mailbox>('/mailboxes', 'POST', body);
       toast(editing ? 'Mailbox updated' : 'Mailbox connected');
       onSaved();
@@ -45,6 +45,11 @@ function MailboxModal({ initial, editing, onClose, onSaved }: { initial: Form; e
         <div className="two">
           <label className="f">From email<input type="email" value={f.fromEmail} onChange={(e) => set('fromEmail', e.target.value)} /></label>
           <label className="f">From name<input value={f.fromName} onChange={(e) => set('fromName', e.target.value)} /></label>
+        </div>
+        <div className="card" style={{ background: '#0d1426', padding: '12px 14px' }}>
+          <label className="row" style={{ fontSize: 13 }}><input type="checkbox" checked={!!f.warmupEnabled} onChange={(e) => set('warmupEnabled', e.target.checked)} /> <b>Warm-up</b>: raise the daily limit gradually (recommended for new mailboxes)</label>
+          {f.warmupEnabled && <div className="two" style={{ marginTop: 10 }}><label className="f">Start at (emails/day)<input type="number" min={1} value={f.warmupStart} onChange={(e) => set('warmupStart', e.target.value)} /></label><label className="f">Add per day<input type="number" min={1} value={f.warmupRamp} onChange={(e) => set('warmupRamp', e.target.value)} /></label></div>}
+          {f.warmupEnabled && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Day 1 sends up to {f.warmupStart}, then +{f.warmupRamp} each day until the daily limit above ({f.limit}).</div>}
         </div>
         <label className="f">Reply-to (optional)<input type="email" value={f.replyTo} onChange={(e) => set('replyTo', e.target.value)} /></label>
         {smtp && (
@@ -118,7 +123,7 @@ export default function Mailboxes({ onChange }: ViewCtx & { onChange: () => void
             <div className="head">
               <span><span className="eyebrow accent">{providerLabel[m.type]}</span> <span className="dim">·</span> <span className={m.resting ? 'warn' : m.enabled ? 'muted' : 'dim'}>{m.resting ? 'Resting' : m.enabled ? 'Active' : 'Paused'}</span></span>
               <span className="row" style={{ gap: 0 }}>
-                <button className="icon-btn" title="Edit" onClick={() => setModal({ form: { ...blank(m.type), ...m, pass: '', apiKey: '', user: m.fromEmail === (m as any).user ? '' : (m as any).user || '', imapEnabled: !!m.imap?.enabled }, editing: m })}><Icon n="sliders" size={15} /></button>
+                <button className="icon-btn" title="Edit" onClick={() => setModal({ form: { ...blank(m.type), ...m, pass: '', apiKey: '', user: m.fromEmail === (m as any).user ? '' : (m as any).user || '', imapEnabled: !!m.imap?.enabled, warmupEnabled: !!m.warmup?.enabled, warmupStart: m.warmup?.startLimit ?? 20, warmupRamp: m.warmup?.rampPerDay ?? 5 }, editing: m })}><Icon n="sliders" size={15} /></button>
                 <button className="icon-btn" title="Delete" onClick={() => remove(m)}><Icon n="trash" size={15} /></button>
               </span>
             </div>
@@ -126,8 +131,9 @@ export default function Mailboxes({ onChange }: ViewCtx & { onChange: () => void
             <div className="addr">{m.fromEmail}</div>
             <div className="meter">
               <div className="line"><span><Icon n="shield" size={13} /> Health Score</span><b>{m.health}% ({m.healthLabel})</b></div>
-              <div className="line"><span>Daily Volume</span><b>{m.sentToday} / {m.limit} emails</b></div>
-              <div className={'bar ' + healthClass(m.health)}><i style={{ width: Math.min(100, (m.sentToday / m.limit) * 100) + '%' }} /></div>
+              <div className="line"><span>Daily Volume</span><b>{m.sentToday} / {m.effectiveLimit} emails</b></div>
+              {m.warmupDaysLeft > 0 && <div className="line"><span>Warm-up</span><b>limit {m.limit} in {m.warmupDaysLeft}d</b></div>}
+              <div className={'bar ' + healthClass(m.health)}><i style={{ width: Math.min(100, (m.sentToday / m.effectiveLimit) * 100) + '%' }} /></div>
             </div>
             <div className="foot">
               <span>{m.host ? `${m.host}:${m.port}` : m.type === 'brevo' ? 'api.brevo.com' : `api.zeptomail.${m.region}`}</span>
@@ -135,6 +141,7 @@ export default function Mailboxes({ onChange }: ViewCtx & { onChange: () => void
                 {m.dns ? (['spf', 'dkim', 'dmarc'] as const).map((k) => <span key={k} className={m.dns![k] ? 'ok' : 'bad'}>{k.toUpperCase()}</span>) : <span className="dim">DNS unchecked</span>}
               </span>
             </div>
+            {!!m.dns?.fixes?.length && <details style={{ marginTop: 10, fontSize: 12 }}><summary className="warn" style={{ cursor: 'pointer' }}>{m.dns.fixes.length} DNS thing{m.dns.fixes.length === 1 ? '' : 's'} to fix</summary><ul style={{ margin: '6px 0 0', paddingLeft: 18, color: '#cbd5e1' }}>{m.dns.fixes.map((x, i) => <li key={i} style={{ marginBottom: 4 }}>{x}</li>)}</ul></details>}
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn sm" disabled={busyId === m.id + 'test'} onClick={() => act(m.id, 'test')}>{busyId === m.id + 'test' ? 'Testing…' : 'Test connection'}</button>
               <button className="btn sm" disabled={busyId === m.id + 'dns'} onClick={() => act(m.id, 'dns')}>Check DNS</button>

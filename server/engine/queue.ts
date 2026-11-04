@@ -2,6 +2,7 @@ import { TZ, fail, today } from '../util.js';
 import { db, flush, markDirty, recips, suppressSet, type Account, type Campaign } from '../store.js';
 import { accName, bump, campaignAccounts, delayFactor, healthScore, leftToday, recordOutcome, volumeFactor } from './balancer.js';
 import { buildMessage, loadAttachments } from './template.js';
+import { effectiveLimit } from './warmup.js';
 import { sendVia } from './transports.js';
 
 export interface LogEntry { id: number; t: number; level: 'ok' | 'warn' | 'err' | 'info'; msg: string; email?: string; mailbox?: string; jitter?: number; campaign?: string; sandbox?: boolean }
@@ -76,7 +77,7 @@ async function worker(run: Run, c: Campaign, acc: Account, i: number, atts: Retu
   const list = recips(c.id);
   await wait(run, st, i * 1.5 + Math.random() * 3);
   while (run.running) {
-    if (leftToday(acc) <= 0) { st.status = 'limit'; log(c.id, `${accName(acc)} reached its daily limit (${acc.limit})`, 'warn', { mailbox: accName(acc) }); return; }
+    if (leftToday(acc) <= 0) { st.status = 'limit'; log(c.id, `${accName(acc)} reached its daily limit (${effectiveLimit(acc)})`, 'warn', { mailbox: accName(acc) }); return; }
     if (st.sent >= st.cap) { st.status = 'cap'; return; }
     if (acc.stats && acc.stats.restUntil > Date.now()) {
       st.status = 'resting';

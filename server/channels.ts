@@ -68,7 +68,8 @@ export function factsFromParsed(p: Awaited<ReturnType<typeof simpleParser>>): Ma
   });
   const text = (p.text || (p.html ? htmlToText(String(p.html)) : '')).split(/\n>|\nOn .* wrote:/)[0].trim();
   const refs = Array.isArray(p.references) ? p.references : p.references ? [p.references] : [];
-  return { from: from.address.toLowerCase(), fromName: from.name || from.address, subject: p.subject || '(no subject)', text, headers, messageId: p.messageId, inReplyTo: p.inReplyTo, references: refs };
+  const dsn = p.attachments.filter((a) => /delivery-status|rfc822-headers/i.test(a.contentType)).map((a) => a.content.toString('utf8').slice(0, 4000)).join('\n') || undefined;
+  return { dsn, from: from.address.toLowerCase(), fromName: from.name || from.address, subject: p.subject || '(no subject)', text, headers, messageId: p.messageId, inReplyTo: p.inReplyTo, references: refs };
 }
 
 async function pollOne(acc: Account, handle: InboundHandler) {

@@ -2,6 +2,7 @@ import { uid } from './util.js';
 import { db, markDirty, recips, type AgentLogEntry } from './store.js';
 import { triageEmail, type Context, type MailFacts } from './ai/triage.js';
 import { ingest } from './inbox.js';
+import { applyBounce, markReply, parseDsn } from './engine/bounces.js';
 
 let ctxCache: { at: number; ctx: Context } | null = null;
 /** Message-IDs we sent and everyone we have ever written to or talked with. Cached for a minute. */
@@ -40,6 +41,10 @@ function addLog(e: Omit<AgentLogEntry, 'id' | 'at'>) {
 export async function processInbound(f: MailFacts, accountId: string, uidNum?: number): Promise<InboundResult> {
   const agent = db.settings.agent;
   const key = mailKey(accountId, f, uidNum);
+  // Deliverability bookkeeping runs even when the agent is off: bounces update recipients, replies update stats.
+  const dsn = parseDsn(f);
+  if (dsn && !db.agentLog.some((e) => e.key === key)) applyBounce(dsn);
+  else if (!dsn) markReply(f);
   if (agent.enabled && db.agentLog.some((e) => e.key === key)) return { action: 'keep', applied: false, skipped: true };
 
   const base = { channel: 'email' as const, handle: f.from, name: f.fromName || f.from, subject: f.subject, text: f.text, accountId };

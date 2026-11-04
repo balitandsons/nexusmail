@@ -11,6 +11,8 @@ export interface MailFacts {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  /** Text of a message/delivery-status part, when the mail is a delivery failure report. */
+  dsn?: string;
 }
 
 export type Category =

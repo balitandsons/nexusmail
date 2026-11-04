@@ -24,7 +24,9 @@ export interface Account {
   pass?: string;
   imap?: { enabled: boolean; host: string; port: number; secure: boolean };
   stats: { sent: number; hard: number; soft: number; consecutive: number; restUntil: number; lastError: string };
-  dns?: { spf: boolean; dkim: boolean; dmarc: boolean; checkedAt: string };
+  dns?: { spf: boolean; dkim: boolean; dmarc: boolean; checkedAt: string; fixes?: string[]; dmarcPolicy?: string };
+  /** Gradually raises the daily limit for a new mailbox: startLimit + rampPerDay x days since startDate, capped at `limit`. */
+  warmup?: { enabled: boolean; startDate: string; startLimit: number; rampPerDay: number };
 }
 
 export interface Attachment { id: string; name: string; type: string; size: number; file: string }
@@ -49,11 +51,14 @@ export interface Recipient {
   email: string;
   name: string;
   vars: Record<string, string>;
-  status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped' | 'bounced';
   acc: string;
   accId?: string;
   messageId?: string;
   attempts?: number;
+  bouncedAt?: string;
+  repliedAt?: string;
+  unsubAt?: string;
   at: string;
   error: string;
 }

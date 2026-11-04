@@ -132,17 +132,41 @@ export async function testAccount(acc: Account): Promise<string> {
 async function txt(name: string): Promise<string[]> {
   try { return (await dns.resolveTxt(name)).map((r) => r.join('')); } catch { return []; }
 }
-export async function checkDns(email: string) {
+const SPF_INCLUDE: Record<string, string> = { hostinger: '_spf.mail.hostinger.com', brevo: 'spf.brevo.com', zepto: 'zcsend.net' };
+
+export interface DnsEvaluation { spf: boolean; dkim: boolean; dmarc: boolean; dmarcPolicy: string; fixes: string[] }
+/** Turns the DNS records found for a sending domain into pass/fail flags plus plain-language fixes. Pure, so it is unit tested. */
+export function evaluateDns(i: { domain: string; type: string; spf: string[]; dmarc: string[]; dkimSelector: string | null }): DnsEvaluation {
+  const fixes: string[] = [];
+  const spfRecs = i.spf.filter((t) => /^v=spf1/i.test(t));
+  const want = SPF_INCLUDE[i.type];
+  if (!spfRecs.length) fixes.push(`SPF is missing. Add a TXT record on ${i.domain}: v=spf1 ${want ? `include:${want} ` : ''}~all`);
+  else {
+    if (spfRecs.length > 1) fixes.push(`${i.domain} has ${spfRecs.length} SPF records. Receivers ignore all of them: merge them into one.`);
+    const r = spfRecs[0];
+    if (want && !r.includes(want)) fixes.push(`SPF does not include ${want}. Add include:${want} to the existing record.`);
+    if (/\+all|\s\?all/i.test(r)) fixes.push('SPF ends with +all or ?all, which allows anyone to send as you. Use ~all or -all.');
+    else if (!/[~-]all/i.test(r)) fixes.push('SPF has no ~all or -all ending. Add ~all at the end.');
+  }
+  const dm = i.dmarc.find((t) => /^v=DMARC1/i.test(t));
+  const policy = dm?.match(/\bp=(none|quarantine|reject)/i)?.[1]?.toLowerCase() ?? '';
+  if (!dm) fixes.push(`DMARC is missing. Add a TXT record on _dmarc.${i.domain}: v=DMARC1; p=none; rua=mailto:dmarc@${i.domain}`);
+  else if (policy === 'none') fixes.push('DMARC policy is p=none (monitor only). That is fine to start. Move to p=quarantine once reports show only your own mail passing.');
+  if (!i.dkimSelector) fixes.push(i.type === 'hostinger' ? 'No DKIM key found. In Hostinger go to Emails > your domain > DNS records and add the DKIM records (selectors hostingermail-a / hostingermail-b).' : 'No DKIM key found. Publish the DKIM record your email provider shows for this domain.');
+  const spfOk = spfRecs.length === 1 && (!want || spfRecs[0].includes(want)) && !/\+all|\s\?all/i.test(spfRecs[0]);
+  return { spf: spfOk, dkim: !!i.dkimSelector, dmarc: !!dm, dmarcPolicy: policy, fixes };
+}
+
+export async function checkDns(email: string, type = 'smtp') {
   const domain = email.split('@')[1];
   if (!domain) throw fail('Invalid email');
-  const [root, dmarc] = await Promise.all([txt(domain), txt('_dmarc.' + domain)]);
-  const spf = root.some((t) => /^v=spf1/i.test(t));
-  const dm = dmarc.some((t) => /^v=DMARC1/i.test(t));
-  let dkim = false;
-  for (const sel of ['default', 'google', 'selector1', 'selector2', 's1', 's2', 'k1', 'hostingermail-a', 'hostingermail-b', 'brevo1', 'brevo2', 'zmail', 'zoho']) {
-    if ((await txt(`${sel}._domainkey.${domain}`)).some((t) => /v=DKIM1|p=/i.test(t))) { dkim = true; break; }
+  const [spf, dmarc] = await Promise.all([txt(domain), txt('_dmarc.' + domain)]);
+  let dkimSelector: string | null = null;
+  for (const sel of ['hostingermail-a', 'hostingermail-b', 'default', 'google', 'selector1', 'selector2', 's1', 's2', 'k1', 'brevo1', 'brevo2', 'zmail', 'zoho']) {
+    if ((await txt(`${sel}._domainkey.${domain}`)).some((t) => /v=DKIM1|p=/i.test(t))) { dkimSelector = sel; break; }
   }
-  return { spf, dkim, dmarc: dm, checkedAt: new Date().toISOString() };
+  const e = evaluateDns({ domain, type, spf, dmarc, dkimSelector });
+  return { spf: e.spf, dkim: e.dkim, dmarc: e.dmarc, dmarcPolicy: e.dmarcPolicy, fixes: e.fixes, checkedAt: new Date().toISOString() };
 }
 
 /** Sends a pre-built RFC 822 message through the mailbox's SMTP account (used by the Mail view). */

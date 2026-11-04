@@ -63,6 +63,14 @@ Every unread email in IMAP-enabled mailboxes (tick *Read replies via IMAP* on a 
 
 Safety: **Dry run is on by default**: it only logs "would trash" until you untick it on the *Inbox Agent* page. Nothing is ever permanently deleted; the log has a *Restore* button (moves it back and allow-lists the sender). Without a `GEMINI_API_KEY` the offline classifier can only keep or hold, never trash. Use the *Test an email* box to check decisions before going live.
 
+## Deliverability
+
+* **Warm-up** (per mailbox, in its edit dialog): start at e.g. 20/day and add 5 per day until the mailbox's daily limit. New mailboxes that send at full volume on day one get flagged; this avoids that. Mailbox cards show today's allowed volume and days left.
+* **Bounces.** When a mailbox with *Read replies via IMAP* receives a delivery-failure notice, the recipient is marked **bounced**, hard bounces go on the do-not-send list, and the sending mailbox's health score drops. Soft failures are retried up to 3 times, then given up on.
+* **Replies and unsubscribes** are matched to the recipient (by `In-Reply-To` or sender), so the stats show real reply and unsubscribe rates.
+* **Deliverability page:** totals, daily chart, per-mailbox and per-campaign bounce/reply/unsubscribe rates (bounce over 2% turns amber, over 5% red) and a CSV export.
+* **DNS check** per mailbox explains what to fix in plain words: missing or duplicate SPF, missing provider include (Hostinger, Brevo, ZeptoMail), `+all`, missing DKIM, missing DMARC, DMARC still on `p=none`.
+
 ## Mail (Gmail-style webmail)
 
 *Mail* opens any Hostinger/SMTP mailbox over IMAP (no setup beyond the saved mailbox password). Folders, search, read, **Reply, Reply all, Forward, Compose, Delete (to Trash), Star, mark read/unread, move**, attachments in both directions, and an **All inboxes** combined view. Replies keep the thread and are filed in Sent. Sending needs **Live** mode. HTML mail is shown in a sandbox with scripts and remote images (tracking pixels) blocked.

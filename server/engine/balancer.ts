@@ -1,9 +1,10 @@
 import { today } from '../util.js';
 import { db, type Account } from '../store.js';
+import { effectiveLimit } from './warmup.js';
 
 export const accName = (a: Account) => a.label || a.fromEmail;
 export const sentToday = (a: Account) => (a.daily && a.daily.date === today() ? a.daily.count : 0);
-export const leftToday = (a: Account) => Math.max(0, a.limit - sentToday(a));
+export const leftToday = (a: Account) => Math.max(0, effectiveLimit(a) - sentToday(a));
 export function bump(a: Account) { if (!a.daily || a.daily.date !== today()) a.daily = { date: today(), count: 0 }; a.daily.count++; }
 
 export const newStats = (): Account['stats'] => ({ sent: 0, hard: 0, soft: 0, consecutive: 0, restUntil: 0, lastError: '' });
