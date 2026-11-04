@@ -11,7 +11,7 @@ export default function ApiHub({ settings, refreshSettings }: ViewCtx) {
   const set = (k: string, v: unknown) => setF((x) => ({ ...x, [k]: v }));
   useEffect(() => {
     if (!settings) return;
-    setF({ publicUrl: settings.publicUrl, testEmail: settings.testEmail, defaultMin: settings.defaultMin, defaultMax: settings.defaultMax, threshold: Math.round(settings.confidenceThreshold * 100), autopilot: settings.autopilot, aiEnabled: settings.aiEnabled, autoUnsub: settings.autoUnsub, businessContext: settings.businessContext, waPhone: settings.whatsapp.phoneId, waVerify: settings.whatsapp.verifyToken, metaVerify: settings.meta.verifyToken, waToken: '', metaToken: '', metaSecret: '' });
+    setF({ publicUrl: settings.publicUrl, testEmail: settings.testEmail, defaultMin: settings.defaultMin, defaultMax: settings.defaultMax, threshold: Math.round(settings.confidenceThreshold * 100), autopilot: settings.autopilot, aiEnabled: settings.aiEnabled, aiDailyLimit: settings.aiDailyLimit, autoUnsub: settings.autoUnsub, businessContext: settings.businessContext, waPhone: settings.whatsapp.phoneId, waVerify: settings.whatsapp.verifyToken, metaVerify: settings.meta.verifyToken, waToken: '', metaToken: '', metaSecret: '' });
     api<{ text: string }>('/suppress').then((r) => setSupp(r.text)).catch(() => undefined);
   }, [settings]);
   if (!settings) return null;
@@ -20,7 +20,7 @@ export default function ApiHub({ settings, refreshSettings }: ViewCtx) {
     try {
       await api('/settings', 'PUT', {
         publicUrl: f.publicUrl, testEmail: f.testEmail, defaultMin: Number(f.defaultMin), defaultMax: Number(f.defaultMax), confidenceThreshold: Number(f.threshold) / 100,
-        autopilot: f.autopilot, aiEnabled: f.aiEnabled, autoUnsub: f.autoUnsub, businessContext: f.businessContext,
+        autopilot: f.autopilot, aiEnabled: f.aiEnabled, aiDailyLimit: Number(f.aiDailyLimit), autoUnsub: f.autoUnsub, businessContext: f.businessContext,
         whatsapp: { token: f.waToken, phoneId: f.waPhone, verifyToken: f.waVerify }, meta: { pageToken: f.metaToken, appSecret: f.metaSecret, verifyToken: f.metaVerify },
       });
       await api('/suppress', 'PUT', { text: supp });
@@ -55,6 +55,7 @@ export default function ApiHub({ settings, refreshSettings }: ViewCtx) {
         <div className="card stack">
           <h3>AI Autopilot &amp; Sending Defaults</h3>
           <label className="row"><input type="checkbox" checked={!!f.aiEnabled} onChange={(e) => set('aiEnabled', e.target.checked)} /> Use Gemini for intent analysis and drafts</label>
+          <label className="f">Daily AI call limit<small>Keeps the Gemini bill near zero. Over the limit, the free offline classifier is used. Today: {settings.aiUsedToday ?? 0} used.</small><input type="number" min={0} value={f.aiDailyLimit ?? 300} onChange={(e) => set('aiDailyLimit', e.target.value)} /></label>
           <label className="row"><input type="checkbox" checked={!!f.autopilot} onChange={(e) => set('autopilot', e.target.checked)} /> Hybrid autopilot: auto-send replies at or above the confidence threshold</label>
           <label className="f"><span className="row sb"><span>Confidence threshold</span><b className="mono">{f.threshold}%</b></span><input type="range" min={50} max={99} value={f.threshold || 85} onChange={(e) => set('threshold', e.target.value)} /></label>
           <label className="f">Business context for the AI<textarea rows={3} value={f.businessContext || ''} onChange={(e) => set('businessContext', e.target.value)} style={{ fontFamily: 'var(--body)' }} /></label>

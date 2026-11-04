@@ -123,6 +123,8 @@ export interface Settings {
   defaultMin: number;
   defaultMax: number;
   aiEnabled: boolean;
+  /** Max Gemini calls per day (keeps the API bill near zero). Over the cap, the offline classifier is used. */
+  aiDailyLimit: number;
   autopilot: boolean;
   confidenceThreshold: number;
   businessContext: string;
@@ -136,7 +138,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agent: DEFAULT_AGENT,
   mode: 'sandbox', publicUrl: process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '', testEmail: '', autoUnsub: true,
   defaultMin: 10, defaultMax: 30,
-  aiEnabled: true, autopilot: true, confidenceThreshold: 0.85,
+  aiEnabled: true, aiDailyLimit: 300, autopilot: true, confidenceThreshold: 0.85,
   businessContext: 'We help teams run compliant, well-paced outreach across multiple mailboxes.',
   whatsapp: { token: '', phoneId: '', verifyToken: '' },
   meta: { pageToken: '', appSecret: '', verifyToken: '' },
@@ -163,6 +165,7 @@ export interface AuditEntry { id: string; at: string; user: string; role: string
 
 interface Db {
   schema: number;
+  aiUsage: { date: string; count: number };
   users: User[];
   audit: AuditEntry[]; accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[]; agentLog: AgentLogEntry[] }
 
@@ -190,6 +193,7 @@ export const db: Db = {
   conversations: loaded.conversations ?? [],
   agentLog: loaded.agentLog ?? [],
   schema: 2,
+  aiUsage: loaded.aiUsage ?? { date: '', count: 0 },
   users: loaded.users ?? [],
   audit: loaded.audit ?? [],
   settings: {

@@ -63,6 +63,12 @@ Every unread email in IMAP-enabled mailboxes (tick *Read replies via IMAP* on a 
 
 Safety: **Dry run is on by default**: it only logs "would trash" until you untick it on the *Inbox Agent* page. Nothing is ever permanently deleted; the log has a *Restore* button (moves it back and allow-lists the sender). Without a `GEMINI_API_KEY` the offline classifier can only keep or hold, never trash. Use the *Test an email* box to check decisions before going live.
 
+## Mail (Gmail-style webmail)
+
+*Mail* opens any Hostinger/SMTP mailbox over IMAP (no setup beyond the saved mailbox password). Folders, search, read, **Reply, Reply all, Forward, Compose, Delete (to Trash), Star, mark read/unread, move**, attachments in both directions, and an **All inboxes** combined view. Replies keep the thread and are filed in Sent. Sending needs **Live** mode. HTML mail is shown in a sandbox with scripts and remote images (tracking pixels) blocked.
+
+Each message carries a free offline hint (Customer / sales, Likely junk, Review). *Draft with AI* and *Junk or relevant?* each make one Gemini call, counted against the **daily AI call limit** (default 300, set under API & Webhooks), so the AI cost stays near zero; past the limit the offline classifier takes over. Viewers cannot open Mail.
+
 ## Security and team access
 
 * **Users and roles.** Sign in with a username and password. On first start the user `admin` is created from `ADMIN_PASSWORD`. Under *Team & Security* an admin adds people as **admin** (everything), **operator** (campaigns, inbox, agent, do-not-send list, mailbox tests) or **viewer** (read only).

@@ -1,12 +1,22 @@
 import { GoogleGenAI } from '@google/genai';
-import { db, type Analysis, type Channel, type Conversation, type Intent } from '../store.js';
+import { today } from '../util.js';
+import { db, markDirty, type Analysis, type Channel, type Conversation, type Intent } from '../store.js';
 
 const INTENTS: Intent[] = ['lead_interested', 'pricing_question', 'support_request', 'objection', 'unsubscribe', 'spam', 'other'];
 const clamp01 = (n: unknown) => { const v = Number(n); return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0; };
 
 const MODEL = () => process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 let client: GoogleGenAI | null = null;
-export const getClient = () => (process.env.GEMINI_API_KEY ? (client ||= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })) : null);
+/** Returns the Gemini client and counts the call against the daily cap; null (offline fallback) once the cap is reached. */
+export const getClient = () => {
+  if (!process.env.GEMINI_API_KEY) return null;
+  const u = db.aiUsage;
+  if (u.date !== today()) { u.date = today(); u.count = 0; }
+  if (u.count >= db.settings.aiDailyLimit) return null;
+  u.count++; markDirty();
+  return (client ||= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }));
+};
+export const aiUsageToday = () => (db.aiUsage.date === today() ? db.aiUsage.count : 0);
 export const aiConfigured = () => !!process.env.GEMINI_API_KEY;
 export const aiModel = MODEL;
 

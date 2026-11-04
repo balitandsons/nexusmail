@@ -48,7 +48,7 @@ export interface Settings {
   aiEnabled: boolean; autopilot: boolean; confidenceThreshold: number; businessContext: string;
   whatsapp: { phoneId: string; verifyToken: string; hasToken: boolean };
   meta: { verifyToken: string; hasPageToken: boolean; hasAppSecret: boolean };
-  suppressCount: number; geminiConfigured: boolean; geminiModel: string;
+  aiDailyLimit: number; aiUsedToday?: number; suppressCount: number; geminiConfigured: boolean; geminiModel: string;
 }
 export interface CampaignSummary { id: string; name: string; status: string; createdAt: string; stats: Record<string, number> }
 export interface CampaignDetail {

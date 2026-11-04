@@ -144,3 +144,13 @@ export async function checkDns(email: string) {
   }
   return { spf, dkim, dmarc: dm, checkedAt: new Date().toISOString() };
 }
+
+/** Sends a pre-built RFC 822 message through the mailbox's SMTP account (used by the Mail view). */
+export async function sendRawSmtp(acc: Account, raw: Buffer, from: string, to: string[]) {
+  if (!isSmtp(acc)) throw sendErr('This mailbox sends through an API, not SMTP.', 400);
+  try { return await transport(acc).sendMail({ envelope: { from, to }, raw }); }
+  catch (err: any) {
+    if (['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET'].includes(err.code)) closeTransport(acc);
+    throw sendErr(err.message, smtpStatus(err));
+  }
+}

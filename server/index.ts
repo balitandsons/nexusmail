@@ -13,6 +13,7 @@ import { processInbound } from './agent.js';
 import api from './routes/api.js';
 import { inboxRouter, webhookRouter } from './routes/omni.js';
 import agentRouter from './routes/agent.js';
+import mailRouter from './routes/mail.js';
 
 let PASSWORD = process.env.ADMIN_PASSWORD || '';
 if (!db.users.length && (!PASSWORD || PASSWORD === 'change-me-to-something-long')) {
@@ -66,6 +67,7 @@ app.use('/api', accountRouter);
 app.use('/api', api);
 app.use('/api', inboxRouter);
 app.use('/api', agentRouter);
+app.use('/api', mailRouter);
 
 /* static client */
 const DIST = path.join(ROOT, 'dist');

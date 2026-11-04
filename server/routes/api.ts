@@ -9,6 +9,7 @@ import { accName, campaignAccounts, healthLabel, healthScore, leftToday, newStat
 import { buildMessage, loadAttachments, parseRecipients } from '../engine/template.js';
 import { active, getCampaign, getLogs, log, pauseCampaign, runs, startCampaign, stats } from '../engine/queue.js';
 import { IMAP_DEFAULTS, imapStatus } from '../channels.js';
+import { aiUsageToday } from '../ai/agent.js';
 
 export const h = (fn: (req: Request, res: Response) => unknown) => (req: Request, res: Response) => {
   Promise.resolve().then(() => fn(req, res)).catch((e: Error & { status?: number }) => {
@@ -117,7 +118,7 @@ const publicSettings = () => {
     meta: { verifyToken: s.meta.verifyToken, hasPageToken: !!s.meta.pageToken, hasAppSecret: !!s.meta.appSecret },
   };
 };
-router.get('/settings', (_req, res) => res.json({ ...publicSettings(), suppressCount: suppressSet.size, today: today(), geminiConfigured: !!process.env.GEMINI_API_KEY, geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash' }));
+router.get('/settings', (_req, res) => res.json({ ...publicSettings(), suppressCount: suppressSet.size, today: today(), geminiConfigured: !!process.env.GEMINI_API_KEY, aiUsedToday: aiUsageToday(), geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash' }));
 router.put('/settings', h((req, res) => {
   const b = req.body || {};
   const s = db.settings;
@@ -136,6 +137,7 @@ router.put('/settings', h((req, res) => {
   if (b.defaultMin !== undefined) s.defaultMin = clampInt(b.defaultMin, 1, 3600, 10);
   if (b.defaultMax !== undefined) s.defaultMax = Math.max(s.defaultMin, clampInt(b.defaultMax, 1, 3600, 30));
   if (b.aiEnabled !== undefined) s.aiEnabled = !!b.aiEnabled;
+  if (b.aiDailyLimit !== undefined) s.aiDailyLimit = clampInt(b.aiDailyLimit, 0, 100000, 300);
   if (b.autopilot !== undefined) s.autopilot = !!b.autopilot;
   if (b.confidenceThreshold !== undefined) s.confidenceThreshold = Math.min(1, Math.max(0.5, Number(b.confidenceThreshold) || 0.85));
   if (b.businessContext !== undefined) s.businessContext = str(b.businessContext).slice(0, 2000);

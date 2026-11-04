@@ -8,13 +8,15 @@ import Inbox from './views/Inbox';
 import ApiHub from './views/ApiHub';
 import Agent from './views/Agent';
 import Team from './views/Team';
+import Mail from './views/Mail';
 
-export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'agent' | 'api' | 'team';
+export type View = 'mailboxes' | 'campaigns' | 'queue' | 'inbox' | 'mail' | 'agent' | 'api' | 'team';
 export interface Me { id: string; username: string; name: string; role: 'admin' | 'operator' | 'viewer'; totpEnabled: boolean }
 const NAV: { id: View; label: string; icon: string; title: string }[] = [
   { id: 'mailboxes', label: 'Mailbox Accounts', icon: 'server', title: 'Mailbox Accounts & Multi-Provider Pools' },
   { id: 'campaigns', label: 'Bulk Campaigns', icon: 'layers', title: 'Campaign Orchestrator & Recipient Lists' },
   { id: 'queue', label: 'Live Queue & Pacing', icon: 'send', title: 'Active Dispatch Queue & Jitter Pacing' },
+  { id: 'mail', label: 'Mail', icon: 'mail', title: 'Mail: read, reply, forward and clean up' },
   { id: 'inbox', label: 'AI Omnichannel Inbox', icon: 'inbox', title: 'Omnichannel Inbound Hub & AI Autopilot' },
   { id: 'agent', label: 'Inbox Agent', icon: 'shield', title: 'Inbox Agent: Triage, Filter & Trash' },
   { id: 'team', label: 'Team & Security', icon: 'users', title: 'Team, Security & Audit Log' },
@@ -105,6 +107,8 @@ function Shell({ onLogout, me }: { onLogout: () => void; me: Me }) {
           {view === 'campaigns' && <Campaigns {...ctx} />}
           {view === 'queue' && <LiveQueue {...ctx} />}
           {view === 'inbox' && <Inbox {...ctx} onChange={ctx.refreshAll} />}
+          {view === 'mail' && me.role !== 'viewer' && <Mail {...ctx} />}
+          {view === 'mail' && me.role === 'viewer' && <div className="card empty">Mail is private. Ask an admin for the operator role.</div>}
           {view === 'agent' && <Agent {...ctx} />}
           {view === 'team' && <Team me={me} />}
           {view === 'api' && <ApiHub {...ctx} />}
