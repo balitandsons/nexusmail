@@ -16,6 +16,8 @@ import { inboxRouter, webhookRouter } from './routes/omni.js';
 import agentRouter from './routes/agent.js';
 import mailRouter from './routes/mail.js';
 import statsRouter from './routes/stats.js';
+import crmRouter from './routes/crm.js';
+import { backfillContacts } from './crm.js';
 
 let PASSWORD = process.env.ADMIN_PASSWORD || '';
 if (!db.users.length && (!PASSWORD || PASSWORD === 'change-me-to-something-long')) {
@@ -24,6 +26,7 @@ if (!db.users.length && (!PASSWORD || PASSWORD === 'change-me-to-something-long'
   console.log(`\n  No ADMIN_PASSWORD was set. Generated one for the user "admin":\n\n     ${PASSWORD}\n`);
 }
 await bootstrapAdmin(PASSWORD);
+if (!db.contacts.length) { const n = backfillContacts(); if (n) console.log(`CRM: created ${n} contacts from existing campaigns and conversations.`); }
 
 const app = express();
 app.disable('x-powered-by');
@@ -72,6 +75,7 @@ app.use('/api', inboxRouter);
 app.use('/api', agentRouter);
 app.use('/api', mailRouter);
 app.use('/api', statsRouter);
+app.use('/api', crmRouter);
 
 /* static client */
 const DIST = path.join(ROOT, 'dist');

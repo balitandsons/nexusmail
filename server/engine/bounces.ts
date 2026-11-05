@@ -2,6 +2,7 @@ import { db, markDirty, recips, suppressSet, type Recipient } from '../store.js'
 import { recordOutcome } from './balancer.js';
 import { log } from './queue.js';
 import type { MailFacts } from '../ai/triage.js';
+import { touchBounce, touchReply, touchUnsub } from '../crm.js';
 
 export interface Dsn { recipient: string; status: string; hard: boolean; diagnostic: string }
 
@@ -35,6 +36,7 @@ export function applyBounce(d: Dsn): { campaign?: string; email: string; mailbox
     if (d.hard) suppressSet.add(d.recipient);
     const acc = db.accounts.find((a) => a.id === r.accId);
     if (acc && d.hard) recordOutcome(acc, 'hard', r.error);
+    touchBounce(d.recipient);
     markDirty(c.id); markDirty();
     log(c.id, `Bounce: ${d.recipient} ${d.hard ? '(hard, added to do-not-send)' : '(soft)'} ${d.status}`, 'warn', { email: d.recipient, mailbox: acc?.label || acc?.fromEmail, campaign: c.id });
     return { campaign: c.id, email: d.recipient, mailbox: acc?.fromEmail };
@@ -54,10 +56,12 @@ export function markReply(f: Pick<MailFacts, 'from' | 'inReplyTo' | 'references'
       if (byId || (r.status === 'sent' && r.email === f.from)) { r.repliedAt = new Date().toISOString(); markDirty(c.id); hit = true; }
     }
   }
+  if (hit) touchReply(f.from);
   return hit;
 }
 
 export function markUnsubscribed(email: string) {
+  touchUnsub(email);
   for (const c of db.campaigns) for (const r of recips(c.id)) if (r.email === email && !r.unsubAt) { r.unsubAt = new Date().toISOString(); markDirty(c.id); }
 }
 

@@ -93,6 +93,7 @@ export default function Inbox({ settings, onChange }: ViewCtx & { onChange: () =
                     <div className="g"><div><span className="dim">Classified Intent:</span><b>{INTENT[a.intent] || a.intent}</b></div><div><span className="dim">Sentiment:</span><b style={{ textTransform: 'capitalize' }}>{a.sentiment}</b></div></div>
                     <div className="conf"><i style={{ width: a.confidence * 100 + '%', background: confColor }} /><u style={{ left: th * 100 + '%' }} /></div>
                     {a.reasons && <div className="muted" style={{ fontSize: 12.5, marginTop: 10 }}>{a.reasons}</div>}
+                    {a.sources?.length ? <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>Answer based on: {a.sources.join(' · ')}</div> : null}
                     {cur.held && <div className="warn" style={{ fontSize: 12.5, marginTop: 8 }}>Held by Inbox Agent, not auto-replied: {cur.heldReason}</div>}
                   </div>
                 )}

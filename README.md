@@ -63,6 +63,12 @@ Every unread email in IMAP-enabled mailboxes (tick *Read replies via IMAP* on a 
 
 Safety: **Dry run is on by default**: it only logs "would trash" until you untick it on the *Inbox Agent* page. Nothing is ever permanently deleted; the log has a *Restore* button (moves it back and allow-lists the sender). Without a `GEMINI_API_KEY` the offline classifier can only keep or hold, never trash. Use the *Test an email* box to check decisions before going live.
 
+## Contacts (CRM), knowledge base and handoff rules
+
+* **Contacts** are created automatically from campaign sends and from every inbound message (email, WhatsApp), and merged by email or phone number so one person is one contact across channels. Stages move forward on their own: new, contacted (email sent), replied, interested (the AI reads interest or a pricing question). Unsubscribing marks a contact lost. Set a stage by hand and automation leaves it alone. Each contact has tags, notes and a timeline of every email and message. Import or export CSV, and select contacts to add them to a campaign (unsubscribed or lost contacts are skipped). On first start after an upgrade, contacts are built from your existing campaigns and conversations.
+* **Knowledge base**: short entries (paste `Q:`/`A:` blocks or `# Heading` sections). When a customer writes in, the best passages are found with BM25 keyword search (no extra service or cost) and given to the AI as the only facts it may state. The inbox shows which entries an answer used. If nothing in the knowledge base covers a factual question, the AI's confidence is capped at 75%, below the auto-send threshold, so a person reviews it.
+* **Handoff rules**: messages with words such as refund, cancel, legal or complaint, anyone who sounds unhappy, and contacts tagged `vip` are never answered automatically. The AI still writes a draft. Optionally NexusMail emails you (from a mailbox you choose, Live mode, at most once an hour per conversation) when a person is needed.
+
 ## Deliverability
 
 * **Warm-up** (per mailbox, in its edit dialog): start at e.g. 20/day and add 5 per day until the mailbox's daily limit. New mailboxes that send at full volume on day one get flagged; this avoids that. Mailbox cards show today's allowed volume and days left.

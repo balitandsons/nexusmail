@@ -103,7 +103,7 @@ export function allowed(role: Role, method: string, path: string): boolean {
   if (method === 'GET' || method === 'HEAD') return true;
   if (/^\/account(\/|$)/.test(path) || path === '/logout') return true; // own password and 2FA
   if (role === 'viewer') return false;
-  return /^\/(campaigns|inbox|agent|suppress|mail)(\/|$)/.test(path) || /^\/mailboxes\/[^/]+\/(test|dns)$/.test(path);
+  return /^\/(campaigns|inbox|agent|suppress|mail|contacts|knowledge|handoff)(\/|$)/.test(path) || /^\/mailboxes\/[^/]+\/(test|dns)$/.test(path);
 }
 
 export function requireUser(req: Request, res: Response, next: NextFunction) {

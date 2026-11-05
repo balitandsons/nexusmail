@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { today } from '../util.js';
+import { searchKnowledge } from './knowledge.js';
 import { db, markDirty, type Analysis, type Channel, type Conversation, type Intent } from '../store.js';
 
 const INTENTS: Intent[] = ['lead_interested', 'pricing_question', 'support_request', 'objection', 'unsubscribe', 'spam', 'other'];
@@ -56,18 +57,39 @@ export function heuristic(conv: Conversation, text: string): Analysis {
   return { intent, sentiment, confidence, summary: text.slice(0, 140), suggestedReply: reply, reasons: 'Keyword classifier (no Gemini key configured or Gemini unavailable).', engine: 'heuristic' };
 }
 
+const FACTUAL: Intent[] = ['pricing_question', 'support_request', 'lead_interested', 'objection'];
+/** Records which knowledge entries were used, and refuses to be confident about facts that no entry backs up. */
+function ground(a: Analysis, passages: { title: string }[]): Analysis {
+  if (passages.length) a.sources = [...new Set(passages.map((p) => p.title))];
+  else if (db.knowledge.length && FACTUAL.includes(a.intent) && a.confidence > 0.75) {
+    a.confidence = 0.75;
+    a.reasons = (a.reasons ? a.reasons + ' ' : '') + 'Capped at 75%: nothing in the knowledge base covers this question.';
+  }
+  return a;
+}
+/** Without Gemini, quote the best matching knowledge passage so the staged draft is at least factual. */
+function offlineWithKnowledge(a: Analysis, conv: Conversation, passages: { text: string }[]): Analysis {
+  if (!passages.length || !FACTUAL.includes(a.intent)) return a;
+  const first = conv.contactName.split(/\s+/)[0] || 'there';
+  a.suggestedReply = `Hi ${first},\n\n${passages[0].text.slice(0, 700)}\n\nLet me know if you would like more detail.`;
+  a.confidence = Math.min(a.confidence, 0.8);
+  return a;
+}
+
 export async function analyze(conv: Conversation, text: string, instruction?: string): Promise<Analysis> {
   const ai = getClient();
-  if (!ai || !db.settings.aiEnabled) return heuristic(conv, text);
+  const passages = searchKnowledge(text + ' ' + (conv.subject || ''), 4);
+  if (!ai || !db.settings.aiEnabled) return ground(offlineWithKnowledge(heuristic(conv, text), conv, passages), passages);
   const history = conv.messages.slice(-8).map((m) => `${m.dir === 'in' ? 'CONTACT' : 'US'}: ${m.text}`).join('\n');
   const prompt = [
     `Channel: ${conv.channel}. Style: ${CHANNEL_STYLE[conv.channel]}`,
     `About us: ${db.settings.businessContext}`,
+    passages.length ? `Verified facts from our knowledge base (the only product, price, policy and delivery facts you may state):\n${passages.map((p, i) => `[${i + 1}] ${p.title}: ${p.text}`).join('\n')}` : (db.knowledge.length ? 'Our knowledge base has nothing relevant to this message, so do not state any specific product, price, policy or delivery facts; ask a clarifying question or say a colleague will follow up.' : ''),
     conv.subject ? `Subject: ${conv.subject}` : '',
     `Conversation so far:\n${history}`,
     `Newest inbound message:\n${text}`,
     instruction ? `Extra instruction for the reply: ${instruction}` : '',
-    'Classify the newest inbound message and draft a reply. Be honest about uncertainty: confidence is the probability (0-1) that sending the drafted reply unreviewed is correct and safe. Use LOW confidence for legal/medical/compliance claims, pricing commitments, refunds, complaints, or anything you would have to guess. Never invent facts, prices or promises. For unsubscribe or spam, leave suggestedReply empty.',
+    'Classify the newest inbound message and draft a reply. Be honest about uncertainty: confidence is the probability (0-1) that sending the drafted reply unreviewed is correct and safe. Use LOW confidence for legal/medical/compliance claims, pricing commitments, refunds, complaints, or anything you would have to guess. Never invent facts, prices or promises; use only the verified facts above when they are given. For unsubscribe or spam, leave suggestedReply empty.',
   ].filter(Boolean).join('\n\n');
   try {
     const res = await ai.models.generateContent({
@@ -92,7 +114,7 @@ export async function analyze(conv: Conversation, text: string, instruction?: st
     });
     const j = JSON.parse(res.text || '{}');
     const intent: Intent = INTENTS.includes(j.intent) ? j.intent : 'other';
-    return {
+    return ground({
       intent,
       sentiment: ['positive', 'neutral', 'negative'].includes(j.sentiment) ? j.sentiment : 'neutral',
       confidence: clamp01(j.confidence),
@@ -100,10 +122,10 @@ export async function analyze(conv: Conversation, text: string, instruction?: st
       suggestedReply: String(j.suggestedReply || ''),
       reasons: String(j.reasons || ''),
       engine: 'gemini',
-    };
+    }, passages);
   } catch (e) {
     console.error('Gemini analysis failed, using fallback:', (e as Error).message);
-    const h = heuristic(conv, text);
+    const h = ground(offlineWithKnowledge(heuristic(conv, text), conv, passages), passages);
     h.reasons = `Gemini call failed (${(e as Error).message.slice(0, 120)}); keyword classifier used.`;
     return h;
   }

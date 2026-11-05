@@ -74,6 +74,8 @@ export interface Analysis {
   suggestedReply: string;
   reasons: string;
   engine: 'gemini' | 'heuristic';
+  /** Titles of the knowledge-base entries the draft was grounded in. */
+  sources?: string[];
 }
 
 export interface Message { id: string; dir: 'in' | 'out'; by: 'contact' | 'ai' | 'human'; text: string; at: string; sandbox?: boolean }
@@ -119,7 +121,39 @@ export interface AgentLogEntry {
   restored?: boolean;
 }
 
+export type Stage = 'new' | 'contacted' | 'replied' | 'interested' | 'customer' | 'lost';
+export interface Contact {
+  id: string;
+  name: string;
+  emails: string[];
+  phones: string[];
+  company: string;
+  tags: string[];
+  stage: Stage;
+  /** True once a person set the stage by hand: automation then leaves it alone. */
+  stageManual?: boolean;
+  source: string;
+  notes: { id: string; at: string; by: string; text: string }[];
+  createdAt: string;
+  lastActivityAt: string;
+}
+export interface KnowledgeEntry { id: string; title: string; text: string; tags: string[]; updatedAt: string }
+export interface Handoff {
+  enabled: boolean;
+  /** Messages containing any of these words always go to a person. */
+  keywords: string[];
+  /** Messages the AI reads as negative always go to a person. */
+  negative: boolean;
+  /** Contacts carrying the tag "vip" always go to a person. */
+  vip: boolean;
+  /** Where "needs your review" alerts are emailed, and which mailbox sends them. */
+  notifyEmail: string;
+  notifyAccountId: string;
+}
+export const DEFAULT_HANDOFF: Handoff = { enabled: true, keywords: ['refund', 'cancel', 'lawyer', 'legal', 'complaint', 'chargeback', 'discount', 'contract'], negative: true, vip: true, notifyEmail: '', notifyAccountId: '' };
+
 export interface Settings {
+  handoff: Handoff;
   agent: AgentSettings;
   mode: 'sandbox' | 'live';
   publicUrl: string;
@@ -141,6 +175,7 @@ export const DEFAULT_AGENT: AgentSettings = { enabled: true, dryRun: true, trash
 
 export const DEFAULT_SETTINGS: Settings = {
   agent: DEFAULT_AGENT,
+  handoff: DEFAULT_HANDOFF,
   mode: 'sandbox', publicUrl: process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '', testEmail: '', autoUnsub: true,
   defaultMin: 10, defaultMax: 30,
   aiEnabled: true, aiDailyLimit: 300, autopilot: true, confidenceThreshold: 0.85,
@@ -170,6 +205,8 @@ export interface AuditEntry { id: string; at: string; user: string; role: string
 
 interface Db {
   schema: number;
+  contacts: Contact[];
+  knowledge: KnowledgeEntry[];
   aiUsage: { date: string; count: number };
   users: User[];
   audit: AuditEntry[]; accounts: Account[]; campaigns: Campaign[]; settings: Settings; suppress: string[]; conversations: Conversation[]; agentLog: AgentLogEntry[] }
@@ -197,13 +234,16 @@ export const db: Db = {
   suppress: loaded.suppress ?? [],
   conversations: loaded.conversations ?? [],
   agentLog: loaded.agentLog ?? [],
-  schema: 2,
+  schema: 3,
+  contacts: loaded.contacts ?? [],
+  knowledge: loaded.knowledge ?? [],
   aiUsage: loaded.aiUsage ?? { date: '', count: 0 },
   users: loaded.users ?? [],
   audit: loaded.audit ?? [],
   settings: {
     ...DEFAULT_SETTINGS, ...(loaded.settings ?? {}),
     agent: { ...DEFAULT_AGENT, ...(loaded.settings?.agent ?? {}) },
+    handoff: { ...DEFAULT_HANDOFF, ...(loaded.settings?.handoff ?? {}) },
     whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(loaded.settings?.whatsapp ?? {}) },
     meta: { ...DEFAULT_SETTINGS.meta, ...(loaded.settings?.meta ?? {}) },
   },

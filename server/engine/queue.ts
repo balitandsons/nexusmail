@@ -3,6 +3,7 @@ import { db, flush, markDirty, recips, suppressSet, type Account, type Campaign 
 import { accName, bump, campaignAccounts, delayFactor, healthScore, leftToday, recordOutcome, volumeFactor } from './balancer.js';
 import { buildMessage, loadAttachments } from './template.js';
 import { effectiveLimit } from './warmup.js';
+import { touchSent } from '../crm.js';
 import { sendVia } from './transports.js';
 
 export interface LogEntry { id: number; t: number; level: 'ok' | 'warn' | 'err' | 'info'; msg: string; email?: string; mailbox?: string; jitter?: number; campaign?: string; sandbox?: boolean }
@@ -95,6 +96,7 @@ async function worker(run: Run, c: Campaign, acc: Account, i: number, atts: Retu
     try {
       const res = await sendVia(acc, buildMessage(c, r, acc, atts));
       r.status = 'sent'; r.error = ''; r.at = new Date().toISOString(); r.messageId = res.messageId;
+      touchSent(r.email, r.name, r.vars?.company || '', c.name);
       bump(acc); recordOutcome(acc, 'sent'); st.sent++; st.fails = 0; st.error = '';
       markDirty();
       jitter = Math.round((c.minDelay + Math.random() * (c.maxDelay - c.minDelay)) * delayFactor(acc));

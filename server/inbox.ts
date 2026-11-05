@@ -3,6 +3,8 @@ import { db, markDirty, suppressSet, type Channel, type Conversation, type Messa
 import { analyze } from './ai/agent.js';
 import { sendReply } from './channels.js';
 import { log } from './engine/queue.js';
+import { touchInbound } from './crm.js';
+import { handoffReason, notifyOwner } from './handoff.js';
 
 export interface InboundEvent {
   channel: Channel;
@@ -41,7 +43,9 @@ export async function ingest(ev: InboundEvent): Promise<Conversation> {
 
   const a = await analyze(conv, ev.text);
   conv.analysis = a;
-  if (ev.hold) { conv.held = true; conv.heldReason = ev.hold; }
+  const contact = touchInbound({ email: ev.channel === 'email' ? ev.handle : undefined, phone: ev.channel === 'whatsapp' ? ev.handle : undefined, name: ev.name }, a.intent);
+  const hold = ev.hold || handoffReason(ev.text, a, contact) || undefined;
+  if (hold) { conv.held = true; conv.heldReason = hold; }
 
   if (a.intent === 'unsubscribe') {
     if (conv.channel === 'email') suppressSet.add(conv.contactHandle);
@@ -53,7 +57,7 @@ export async function ingest(ev: InboundEvent): Promise<Conversation> {
   if (a.intent === 'spam') { conv.status = 'closed'; markDirty(); return conv; }
 
   const trusted = a.engine === 'gemini' || db.settings.mode === 'sandbox'; // keyword fallback never sends unreviewed in Live mode
-  const eligible = !ev.hold && db.settings.autopilot && trusted && a.confidence >= db.settings.confidenceThreshold;
+  const eligible = !hold && db.settings.autopilot && trusted && a.confidence >= db.settings.confidenceThreshold;
 
   if (eligible && a.suggestedReply.trim()) {
     try {
@@ -67,6 +71,7 @@ export async function ingest(ev: InboundEvent): Promise<Conversation> {
     }
   } else conv.status = 'needs_review';
   markDirty();
+  if (conv.status === 'needs_review') void notifyOwner(conv, hold || `The AI was only ${Math.round(a.confidence * 100)}% sure of its reply`);
   return conv;
 }
 
