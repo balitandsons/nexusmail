@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import dns from 'node:dns/promises';
 import { sleep, fail } from '../util.js';
 import { db, type Account } from '../store.js';
@@ -33,7 +33,7 @@ async function check(res: Response): Promise<Record<string, unknown>> {
   return j || {};
 }
 
-const pools = new Map<string, nodemailer.Transporter>();
+const pools = new Map<string, Transporter>();
 const poolKey = (a: Account) => [a.host, a.port, a.secure, a.user, a.pass].join('|');
 function transport(a: Account) {
   const k = poolKey(a);
