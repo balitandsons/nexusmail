@@ -128,6 +128,8 @@ export interface Contact {
   emails: string[];
   phones: string[];
   company: string;
+  /** Indian state or region, used to filter and target lists. */
+  state?: string;
   tags: string[];
   stage: Stage;
   /** True once a person set the stage by hand: automation then leaves it alone. */

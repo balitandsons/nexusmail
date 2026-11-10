@@ -73,3 +73,9 @@ test('offline replies quote the knowledge base and ungrounded factual answers ar
   const ungrounded = await A.analyze(conv('What is the price of the gold plan?'), 'What is the price of the gold plan?');
   assert.ok(ungrounded.confidence <= 0.75);
 });
+
+test('contacts keep their state', () => {
+  const c = C.upsertContact({ email: 'g0@guj.example', company: 'Co', state: 'Gujarat' })!;
+  assert.equal(c.state, 'Gujarat');
+  assert.equal(C.upsertContact({ email: 'g0@guj.example', state: 'Kerala' })!.state, 'Gujarat'); // never overwritten
+});

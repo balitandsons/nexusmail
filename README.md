@@ -69,6 +69,10 @@ Safety: **Dry run is on by default**: it only logs "would trash" until you untic
 * **Knowledge base**: short entries (paste `Q:`/`A:` blocks or `# Heading` sections). When a customer writes in, the best passages are found with BM25 keyword search (no extra service or cost) and given to the AI as the only facts it may state. The inbox shows which entries an answer used. If nothing in the knowledge base covers a factual question, the AI's confidence is capped at 75%, below the auto-send threshold, so a person reviews it.
 * **Handoff rules**: messages with words such as refund, cancel, legal or complaint, anyone who sounds unhappy, and contacts tagged `vip` are never answered automatically. The AI still writes a draft. Optionally NexusMail emails you (from a mailbox you choose, Live mode, at most once an hour per conversation) when a person is needed.
 
+## Lead lists
+
+*Contacts (CRM)* is also the place for big lead lists. Import a CSV (`email, name, company, state, tags`; extra tags such as `solar-india`), then filter by **state**, **tag** or stage and use **Add N to campaign**: it adds the next N matching people who have not been emailed yet (run it again for the next batch), skipping unsubscribed and lost contacts. Campaign emails can use `{{company}}` and `{{state}}`. `tools/clean_leads.py` cleans messy spreadsheets (de-obfuscates `[at]`/`[dot]` emails, repairs shifted rows and domain typos, validates, de-duplicates, normalises state and company names): `python3 tools/clean_leads.py input.xlsx output_dir` (needs `pip install openpyxl`).
+
 ## Deliverability
 
 * **Warm-up** (per mailbox, in its edit dialog): start at e.g. 20/day and add 5 per day until the mailbox's daily limit. New mailboxes that send at full volume on day one get flagged; this avoids that. Mailbox cards show today's allowed volume and days left.

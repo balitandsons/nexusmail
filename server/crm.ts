@@ -21,7 +21,7 @@ export function findContact(email?: string, phone?: string): Contact | undefined
   return (email ? byEmail.get(normEmail(email)) : undefined) ?? (phone && normPhone(phone) ? byPhone.get(normPhone(phone)) : undefined);
 }
 
-export interface ContactInput { email?: string; phone?: string; name?: string; company?: string; source?: string; tags?: string[] }
+export interface ContactInput { email?: string; phone?: string; name?: string; company?: string; state?: string; source?: string; tags?: string[] }
 /** Finds the person by email or phone (merging channels) or creates them. Never overwrites a name that is already set. */
 export function upsertContact(i: ContactInput): Contact | null {
   const email = i.email && EMAIL_RE.test(normEmail(i.email)) ? normEmail(i.email) : undefined;
@@ -30,11 +30,12 @@ export function upsertContact(i: ContactInput): Contact | null {
   let c = findContact(email, phone);
   const now = new Date().toISOString();
   if (!c) {
-    c = { id: uid(), name: i.name?.trim() || email || phone || '', emails: [], phones: [], company: i.company?.trim() || '', tags: [], stage: 'new', source: i.source || '', notes: [], createdAt: now, lastActivityAt: now };
+    c = { id: uid(), name: i.name?.trim() || email || phone || '', emails: [], phones: [], company: i.company?.trim() || '', state: i.state?.trim() || undefined, tags: [], stage: 'new', source: i.source || '', notes: [], createdAt: now, lastActivityAt: now };
     db.contacts.push(c);
   } else {
     if (i.name?.trim() && (!c.name || c.name === c.emails[0] || c.name === c.phones[0])) c.name = i.name.trim();
     if (i.company?.trim() && !c.company) c.company = i.company.trim();
+    if (i.state?.trim() && !c.state) c.state = i.state.trim();
   }
   if (email && !c.emails.includes(email)) { c.emails.push(email); byEmail.set(email, c); }
   if (phone && !c.phones.includes(phone)) { c.phones.push(phone); byPhone.set(phone, c); }
