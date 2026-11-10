@@ -7,7 +7,7 @@ import { db, markDirty, suppressSet } from './store.js';
 import { auditMiddleware, bootstrapAdmin, requireUser } from './auth.js';
 import accountRouter, { authRouter } from './routes/account.js';
 import { parseUnsub } from './engine/template.js';
-import { bootQueue } from './engine/queue.js';
+import { active, bootQueue } from './engine/queue.js';
 import { markUnsubscribed } from './engine/bounces.js';
 import { startImapPolling } from './channels.js';
 import { processInbound } from './agent.js';
@@ -30,7 +30,7 @@ if (!db.contacts.length) { const n = backfillContacts(); if (n) console.log(`CRM
 
 const app = express();
 app.disable('x-powered-by');
-app.get('/healthz', (_req, res) => void res.json({ ok: true }));
+app.get('/healthz', (_req, res) => void res.json({ ok: true, uptimeSec: Math.round(process.uptime()), sending: active ? active.cid : null }));
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 app.use((req, res, next) => {
   res.set('X-Frame-Options', 'DENY'); res.set('Referrer-Policy', 'same-origin'); res.set('X-Content-Type-Options', 'nosniff');

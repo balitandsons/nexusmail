@@ -31,6 +31,8 @@ export function parseCSV(text: string): string[][] {
   return rows.map((r) => r.map((x) => x.trim())).filter((r) => r.some(Boolean));
 }
 
+const ANY_EMAIL = /[^\s@<>,;"'()[\]|]+@[^\s@<>,;"'()[\]|]+\.[^\s@<>,;"'()[\]|]{2,}/g;
+
 export function parseRecipients(text: string): { list: Pick<Recipient, 'email' | 'name' | 'vars'>[]; invalid: number } {
   const rows = parseCSV(String(text || '').replace(/^﻿/, ''));
   const out: Pick<Recipient, 'email' | 'name' | 'vars'>[] = [];
@@ -48,10 +50,13 @@ export function parseRecipients(text: string): { list: Pick<Recipient, 'email' |
       out.push({ email, name: ni >= 0 ? r[ni] || '' : '', vars });
     }
   } else {
+    // No header row: every email address on every row is a recipient, however they are separated
+    // (one per line, or a single line separated by commas, semicolons, spaces or tabs; "Name <a@b.com>" also works).
     for (const r of rows) {
-      const idx = r.findIndex((c) => EMAIL_RE.test(c.toLowerCase()));
-      if (idx < 0) { invalid++; continue; }
-      out.push({ email: r[idx].toLowerCase(), name: r.find((c, i) => i !== idx && c && !c.includes('@')) || '', vars: {} });
+      const found = [...r.join(' ').matchAll(ANY_EMAIL)].map((m) => m[0].toLowerCase());
+      if (!found.length) { invalid++; continue; }
+      const name = found.length === 1 ? r.find((c) => c && !c.includes('@') && !/^<.*>$/.test(c)) || '' : '';
+      for (const email of found) out.push({ email, name, vars: {} });
     }
   }
   return { list: out, invalid };

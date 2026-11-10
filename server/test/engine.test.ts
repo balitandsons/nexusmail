@@ -37,3 +37,14 @@ test('health score drops with hard bounces and cuts volume share', () => {
   assert.ok(healthScore(a) < 50);
   assert.ok(volumeFactor(a) < 1);
 });
+
+test('a pasted list works however the addresses are separated', () => {
+  const emails = (t: string) => parseRecipients(t).list.map((r) => r.email);
+  assert.deepEqual(emails('a@x.com, b@y.com, c@z.com'), ['a@x.com', 'b@y.com', 'c@z.com']); // one line
+  assert.deepEqual(emails('a@x.com; b@y.com;c@z.com'), ['a@x.com', 'b@y.com', 'c@z.com']);
+  assert.deepEqual(emails('a@x.com b@y.com\tc@z.com'), ['a@x.com', 'b@y.com', 'c@z.com']);
+  assert.deepEqual(emails('a@x.com\r\nb@y.com\r\n\r\nc@z.com\r\n'), ['a@x.com', 'b@y.com', 'c@z.com']);
+  assert.deepEqual(emails('Maria <m@buyer.com>\nKim Lee, kim@ok.example'), ['m@buyer.com', 'kim@ok.example']);
+  assert.equal(parseRecipients('Maria Buyer, maria@buyer.com').list[0].name, 'Maria Buyer');
+  assert.deepEqual(emails('email,name\na@x.com,A\nb@y.com,B'), ['a@x.com', 'b@y.com']); // header CSV unchanged
+});
